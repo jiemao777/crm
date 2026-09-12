@@ -5,12 +5,16 @@
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts",
+		"./agent-provider": "./src/agent-provider.ts",
 		"./agent-tasks": "./src/agent-tasks.ts",
 		"./blob": "./src/blob.ts",
 		"./client": "./src/client.ts",
+		"./credentials": "./src/credentials.ts",
+		"./deal-stage": "./src/deal-stage.ts",
 		"./enums": "./src/generated/prisma/enums.ts",
 		"./favicon": "./src/favicon.ts",
 		"./images": "./src/images.ts",
+		"./research-provider": "./src/research-provider.ts",
 		"./safe-fetch": "./src/safe-fetch.ts",
 		"./settings": "./src/settings.ts",
 		"./workspace": "./src/workspace.ts"

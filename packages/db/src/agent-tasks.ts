@@ -1,6 +1,7 @@
 export const TASK_KINDS = [
 	"brand",
 	"portrait",
+	"mail-intake",
 	"meeting-prep",
 	"identify",
 	"profile",
@@ -24,6 +25,7 @@ export const PRIORITY = {
 	portrait: 800,
 	workspace: 500,
 	requested: 300,
+	mail: 250,
 	meeting: 200,
 	identify: 100,
 	sweep: 50,

@@ -1,0 +1,3 @@
+ALTER TABLE "emailMessage" ADD COLUMN "isRead" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "emailMessage" ADD COLUMN "starred" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "emailMessage" ADD COLUMN "deletedAt" TIMESTAMP(3);

@@ -241,23 +241,27 @@ const TITLES = [
 ] as const;
 
 const OPEN_STAGES = [
-	DealStage.DEMO_BOOKED,
-	DealStage.QUALIFIED_TO_BUY,
-	DealStage.DECISION_MAKER_BOUGHT_IN,
-	DealStage.CONTRACT_SENT,
+	DealStage.NEW_INQUIRY,
+	DealStage.CONTACTED,
+	DealStage.REPLIED,
+	DealStage.RFQ_RECEIVED,
+	DealStage.QUOTED,
+	DealStage.SAMPLE,
+	DealStage.NEGOTIATING,
+	DealStage.PROFORMA_INVOICE,
 ] as const;
 
 const CLOSED_STAGES = [
-	DealStage.CLOSED_WON,
-	DealStage.CLOSED_LOST,
-	DealStage.UNQUALIFIED_TO_BUY,
+	DealStage.WON,
+	DealStage.LOST,
+	DealStage.UNQUALIFIED,
 ] as const;
 
 const LOST_REASONS = [
-	"Went with an incumbent vendor",
-	"No budget this cycle",
-	"Timeline slipped to next year",
-	"Not a fit — no compliance requirement yet",
+	"Price was outside the buyer's target",
+	"Buyer chose another supplier",
+	"Required specification was not available",
+	"No response after quotation",
 ] as const;
 
 const NOTE_BODIES = [
@@ -491,25 +495,39 @@ async function seedDeals(
 				where: { id },
 				create: {
 					id,
+					inquiryNo: `INQ-${createdAt.getFullYear()}-${id.slice(-6).toUpperCase()}`,
 					name:
 						n === 0
-							? `${company.name} — Comp AI`
-							: `${company.name} — expansion`,
+							? `${company.name} — product inquiry`
+							: `${company.name} — repeat inquiry`,
 					companyId: company.id,
 					ownerId,
 					stage,
 					stageChangedAt,
 					amount: integer(6, 90) * 1000,
 					currency: "USD",
-					expectedCloseDate: daysFromNow(
+					expectedOrderDate: daysFromNow(
 						closedDaysAgo === null
 							? integer(-10, 75)
 							: -closedDaysAgo + integer(-4, 9),
 					),
+					inquiryReceivedAt: createdAt,
+					productSummary: pick([
+						"Packaging",
+						"Solar equipment",
+						"Industrial components",
+						"Home goods",
+					]),
+					quantity: `${integer(100, 5000)} PCS`,
+					destinationPort: pick([
+						"Hamburg",
+						"Los Angeles",
+						"Dubai",
+						"Rotterdam",
+					]),
 					closedAt: closed ? stageChangedAt : null,
 					closedReason:
-						stage === DealStage.CLOSED_LOST ||
-						stage === DealStage.UNQUALIFIED_TO_BUY
+						stage === DealStage.LOST || stage === DealStage.UNQUALIFIED
 							? pick(LOST_REASONS)
 							: null,
 					createdAt,
@@ -617,8 +635,8 @@ async function seedActivities(
 			dealId: deal.id,
 			subject: "Stage changed",
 			meta: {
-				from: DealStage.DEMO_BOOKED,
-				to: deal.closed ? DealStage.CLOSED_WON : DealStage.QUALIFIED_TO_BUY,
+				from: DealStage.NEW_INQUIRY,
+				to: deal.closed ? DealStage.WON : DealStage.RFQ_RECEIVED,
 			},
 		});
 	}
