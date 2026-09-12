@@ -8,6 +8,7 @@ export type Opened = {
 	kind?: string | null;
 	reason?: string | null;
 	budget?: number | null;
+	allowCreate?: boolean;
 };
 
 export type Preamble = {
@@ -20,10 +21,14 @@ export async function sessionPreamble(
 		contactId?: string | null;
 		companyId?: string | null;
 		dealId?: string | null;
+		emailThreadId?: string | null;
 	},
 	opened: Opened,
 ): Promise<Preamble> {
 	if (opened.kind === "workspace-profile") return workspacePreamble();
+	if (record.emailThreadId) {
+		return mailThreadPreamble(record.emailThreadId, opened);
+	}
 	if (record.contactId) return contactPreamble(record.contactId, opened);
 	if (record.companyId) return companyPreamble(record.companyId, opened);
 	if (record.dealId) return dealPreamble(record.dealId, opened);
@@ -233,7 +238,12 @@ export async function dealPreamble(
 			stage: true,
 			amount: true,
 			currency: true,
-			expectedCloseDate: true,
+			inquiryNo: true,
+			productSummary: true,
+			quantity: true,
+			incoterm: true,
+			destinationPort: true,
+			expectedOrderDate: true,
 			lastActivityAt: true,
 			company: { select: { id: true, name: true } },
 			contacts: {
@@ -263,18 +273,22 @@ export async function dealPreamble(
 	const markdown = [
 		"## This session",
 		"",
-		`You are working on the deal **${deal.name}**${
-			deal.company ? ` at ${deal.company.name}` : ""
-		} — deal id \`${dealId}\`${
-			deal.company ? `, company id \`${deal.company.id}\`` : ""
+		`You are working on the inquiry **${deal.name}**${
+			deal.company ? ` from ${deal.company.name}` : ""
+		} — inquiry id \`${dealId}\`${
+			deal.company ? `, customer id \`${deal.company.id}\`` : ""
 		}.`,
 		`Stage: **${deal.stage}**${
 			deal.amount
 				? `. Amount: ${deal.amount} ${deal.currency ?? ""}`.trim()
 				: ""
 		}${
-			deal.expectedCloseDate
-				? `. Expected close: ${deal.expectedCloseDate.toDateString()}`
+			deal.productSummary ? `. Product: ${deal.productSummary}` : ""
+		}${deal.quantity ? `. Quantity: ${deal.quantity}` : ""}${
+			deal.incoterm ? `. Incoterm: ${deal.incoterm}` : ""
+		}${deal.destinationPort ? `. Destination: ${deal.destinationPort}` : ""}${
+			deal.expectedOrderDate
+				? `. Expected order: ${deal.expectedOrderDate.toDateString()}`
 				: ""
 		}.`,
 		deal.lastActivityAt
@@ -284,17 +298,92 @@ export async function dealPreamble(
 		"",
 		opening(
 			opened,
-			"where this stands, who else should be involved, or what the risk is",
+			"what the buyer needs, where the RFQ or quotation stands, or what the next commercial step is",
 		),
 		"",
-		"Start with `read_deal_history` on this deal id. It returns the stage clock, every stage this deal has moved through, the last reply from their side and the next meeting — which is how you answer *where does this stand* rather than reciting the stage field back.",
+		"Start with `read_deal_history` on this inquiry id. It returns the stage clock, every stage it has moved through, the last buyer reply and the next meeting — which is how you answer where the inquiry stands rather than reciting the stage field back.",
 		"",
-		"You can research the people and the company behind it with the usual tools — a deal itself has no fields to enrich, so anything you learn is recorded against them.",
+		"You can research the buyer contacts and company with the usual tools. Do not infer quantities, product specifications, prices, payment terms or delivery commitments: those are commercial facts a rep confirms with the buyer.",
 		"",
 		await closing(),
 	].join("\n");
 
 	return { markdown, focus: { companyId: deal.company?.id ?? null } };
+}
+
+export async function mailThreadPreamble(
+	emailThreadId: string,
+	opened: Opened,
+): Promise<Preamble> {
+	const thread = await db.emailThread.findUnique({
+		where: { id: emailThreadId },
+		select: {
+			subject: true,
+			category: true,
+			company: { select: { id: true, name: true } },
+			contact: {
+				select: { id: true, firstName: true, lastName: true, email: true },
+			},
+			messages: {
+				orderBy: { sentAt: "asc" },
+				take: 20,
+				select: {
+					direction: true,
+					fromEmail: true,
+					fromName: true,
+					recipients: true,
+					subject: true,
+					body: true,
+					sentAt: true,
+				},
+			},
+		},
+	});
+
+	if (!thread) return { markdown: await closing(), focus: {} };
+
+	const messages = thread.messages
+		.map((message, index) =>
+			[
+				`### Message ${index + 1}`,
+				`${message.direction} at ${message.sentAt.toISOString()}`,
+				`From: ${message.fromName ?? ""} <${message.fromEmail}>`,
+				`Recipients: ${JSON.stringify(message.recipients)}`,
+				`Subject: ${message.subject ?? "(no subject)"}`,
+				message.body?.slice(0, 5_000) || "(empty body)",
+			].join("\n"),
+		)
+		.join("\n\n");
+
+	const currentLink = thread.contact
+		? `Contact: ${[thread.contact.firstName, thread.contact.lastName]
+				.filter(Boolean)
+				.join(
+					" ",
+				)} <${thread.contact.email ?? "no email"}> \`${thread.contact.id}\``
+		: thread.company
+			? `Company: ${thread.company.name} \`${thread.company.id}\``
+			: "Unlinked";
+
+	const markdown = [
+		"## This session",
+		"",
+		`You are filing email thread \`${emailThreadId}\`.`,
+		`Current category: **${thread.category}**. Current link: ${currentLink}.`,
+		opened.allowCreate
+			? "The mailbox owner enabled customer creation for conversations they sent or replied to. You may include a new customer in `file_mail_thread` only when these messages state the customer email and enough of a name to identify the record."
+			: "Do not create a customer in this task. Link only an exact existing CRM match.",
+		"",
+		"Choose one category: INQUIRY for a buyer request, PROMOTION for marketing, NOTIFICATION for automated operational mail, or OTHER.",
+		"Use `search_crm` with the external email or domain before linking. A matching name alone is not enough. Call `file_mail_thread` once with the category, the ids proven by the messages, and a short evidence statement. Leave ids empty when the match is not exact.",
+		"Do not call `create_company`; `file_mail_thread` enforces this task's creation setting and commits the thread atomically.",
+		"",
+		messages,
+		"",
+		await closing(),
+	].join("\n");
+
+	return { markdown, focus: {} };
 }
 
 export async function noRecordPreamble(): Promise<Preamble> {

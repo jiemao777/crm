@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
-	CONTEXT_DEV,
 	capabilitiesFrom,
 	enabled,
 	markdownFor,
+	RESEARCH_PROVIDER,
 	unavailable,
 } from "../agent/lib/capabilities";
 
@@ -60,28 +60,29 @@ describe("capabilities", () => {
 	});
 });
 
-describe("the Context key is a setting, never a variable", () => {
-	const contextDev = (stored: string | null) =>
-		capabilitiesFrom(stored).find((c) => c.id === CONTEXT_DEV);
+describe("the research provider is a setting, never a variable", () => {
+	const research = (provider: "context" | "tavily" | null) =>
+		capabilitiesFrom(provider).find((c) => c.id === RESEARCH_PROVIDER);
 
-	it("is on when a key is stored", () => {
-		expect(contextDev("ctx-from-the-settings-page")?.enabled).toBe(true);
+	it("is on when a provider is stored", () => {
+		expect(research("context")?.enabled).toBe(true);
+		expect(research("tavily")?.enabled).toBe(true);
 	});
 
 	it("is off when nothing has been stored", () => {
-		expect(contextDev(null)?.enabled).toBe(false);
+		expect(research(null)?.enabled).toBe(false);
 	});
 
 	it("is not turned on by an environment variable", () => {
 		process.env.CONTEXT_DEV_API_KEY = "a-variable-nothing-reads";
 
-		expect(contextDev(null)?.enabled).toBe(false);
+		expect(research(null)?.enabled).toBe(false);
 
 		delete process.env.CONTEXT_DEV_API_KEY;
 	});
 
 	it("points at the settings page rather than a variable name", () => {
-		expect(contextDev(null)?.from).toBe("Settings → General");
+		expect(research(null)?.from).toBe("Settings → General");
 	});
 });
 
@@ -117,7 +118,7 @@ describe("the capability briefing", () => {
 	it("counts a stored Context key as configured", () => {
 		process.env.RAPIDAPI_KEY = "key";
 
-		const markdown = markdownFor(capabilitiesFrom("ctx"));
+		const markdown = markdownFor(capabilitiesFrom("context"));
 
 		expect(markdown).toContain("Company brand data");
 		expect(markdown.indexOf("Company brand data")).toBeLessThan(
@@ -128,7 +129,7 @@ describe("the capability briefing", () => {
 	it("does not warn about missing sources when everything is on", () => {
 		for (const key of KEYS) process.env[key] = "key";
 
-		expect(markdownFor(capabilitiesFrom("ctx"))).not.toContain(
+		expect(markdownFor(capabilitiesFrom("context"))).not.toContain(
 			"Not configured here",
 		);
 	});

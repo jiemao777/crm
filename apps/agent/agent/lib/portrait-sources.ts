@@ -1,6 +1,7 @@
-import { extract } from "./context-dev";
+import { z } from "zod";
 import { getProfile, slugFromProfileUrl } from "./linkdapi";
 import { namesMatch } from "./names";
+import { activeResearchProviderKind, extract } from "./research-provider";
 
 export type PortraitSource = "linkedin" | "github" | "employer-site";
 
@@ -59,7 +60,11 @@ export async function findPortrait(
 		};
 	}
 
-	if (subject.companyDomain && subject.name) {
+	if (
+		subject.companyDomain &&
+		subject.name &&
+		(await activeResearchProviderKind()) === "context"
+	) {
 		const charge = spend(2);
 		if (!charge.ok) return { found: false, tried, reason: charge.reason };
 
@@ -71,27 +76,21 @@ export async function findPortrait(
 	return { found: false, tried };
 }
 
-const TEAM_SCHEMA = {
-	type: "object",
-	properties: {
-		people: {
-			type: "array",
-			items: {
-				type: "object",
-				properties: {
-					name: { type: "string" },
-					title: { type: "string" },
-					photoUrl: {
-						type: "string",
-						description: "Absolute URL of this person's headshot.",
-					},
-				},
-				required: ["name"],
-			},
-		},
-	},
-	required: ["people"],
-};
+const TEAM_SCHEMA = z.object({
+	people: z
+		.array(
+			z.object({
+				name: z.string().max(200),
+				title: z.string().max(200).optional(),
+				photoUrl: z
+					.string()
+					.max(2_000)
+					.optional()
+					.describe("Absolute URL of this person's headshot."),
+			}),
+		)
+		.max(200),
+});
 
 async function fromEmployerSite(
 	subject: PortraitSubject,
@@ -106,20 +105,11 @@ async function fromEmployerSite(
 
 	if (result.outcome !== "found") return null;
 
-	const people = (result.data as { people?: unknown } | null)?.people;
-	if (!Array.isArray(people)) return null;
-
-	for (const entry of people) {
-		if (!entry || typeof entry !== "object") continue;
-		const row = entry as Record<string, unknown>;
-
-		const name = typeof row.name === "string" ? row.name : null;
-		const photo = typeof row.photoUrl === "string" ? row.photoUrl : null;
-		if (!name || !photo) continue;
-		if (!namesMatch(name, subject.name)) continue;
+	for (const person of result.data.people) {
+		if (!person.photoUrl || !namesMatch(person.name, subject.name)) continue;
 
 		try {
-			const parsed = new URL(photo);
+			const parsed = new URL(person.photoUrl);
 			if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
 			return { source: "employer-site", url: parsed.toString() };
 		} catch {}

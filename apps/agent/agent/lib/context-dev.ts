@@ -1,89 +1,26 @@
 import ContextDev from "context.dev";
 import { APIError } from "context.dev/core/error";
-import { contextDevKey } from "./capabilities";
-
-export type Brand = {
-	domain?: string | null;
-	title?: string | null;
-	description?: string | null;
-	slogan?: string | null;
-	email?: string | null;
-	phone?: string | null;
-	colors?: { hex?: string | null; name?: string | null }[] | null;
-	logos?:
-		| {
-				url?: string | null;
-				mode?: string | null;
-				type?: string | null;
-				colors?: { hex?: string | null; name?: string | null }[] | null;
-		  }[]
-		| null;
-	socials?: { type?: string | null; url?: string | null }[] | null;
-	address?: {
-		city?: string | null;
-		state_code?: string | null;
-		country?: string | null;
-		country_code?: string | null;
-	} | null;
-	industries?: {
-		eic?: { industry?: string | null; subindustry?: string | null }[] | null;
-	} | null;
-	links?: {
-		pricing?: string | null;
-		careers?: string | null;
-	} | null;
-};
-
-export type LookupResult =
-	| { outcome: "found"; brand: Brand; raw: unknown }
-	| { outcome: "skipped"; reason: string }
-	| { outcome: "failed"; reason: string; retryable: boolean };
-
-export type SearchResult = {
-	url: string | null;
-	title: string | null;
-	description: string | null;
-	markdown: string | null;
-};
+import type {
+	Brand,
+	KeyCheck,
+	LookupResult,
+	StructuredResearchResult,
+} from "./research-types";
 
 const TIMEOUT_MS = 60_000;
+const VERIFY_TIMEOUT_MS = 15_000;
+const PROBE_EMAIL = "key-check@gmail.com";
 
 let client: { key: string; api: ContextDev } | null = null;
 
-async function contextDev(): Promise<ContextDev | null> {
-	const key = await contextDevKey();
-
-	if (!key) {
-		client = null;
-		return null;
-	}
-
+function contextDev(key: string): ContextDev {
 	if (client?.key !== key) {
 		client = { key, api: new ContextDev({ apiKey: key }) };
 	}
-
 	return client.api;
 }
 
-export async function contextDevEnabled(): Promise<boolean> {
-	return (await contextDevKey()) !== null;
-}
-
-export type KeyCheck =
-	| { outcome: "valid" }
-	| { outcome: "invalid"; reason: string }
-	| { outcome: "unknown"; reason: string };
-
-/**
- * A free-provider address is refused with a documented 422 before any brand is
- * resolved, and a lookup that resolves nothing is not billed — so this proves
- * the key authenticates without spending a credit.
- */
-const PROBE_EMAIL = "key-check@gmail.com";
-
-const VERIFY_TIMEOUT_MS = 15_000;
-
-export async function verifyKey(key: string): Promise<KeyCheck> {
+export async function verifyContextKey(key: string): Promise<KeyCheck> {
 	const api = new ContextDev({ apiKey: key });
 
 	try {
@@ -92,20 +29,12 @@ export async function verifyKey(key: string): Promise<KeyCheck> {
 			email: PROBE_EMAIL,
 			timeoutMS: VERIFY_TIMEOUT_MS,
 		});
-
 		return { outcome: "valid" };
 	} catch (error) {
 		return classifyKey(error);
 	}
 }
 
-/**
- * 401 is the only answer that means *this key is wrong*. Everything else that
- * came back from Context.dev — a 422 refusing the probe address, a 403 about
- * the plan, a 429, a 500 — was served *after* the key authenticated, so the
- * key is good and only the probe was refused. Anything that never reached them
- * says nothing about the key at all.
- */
 export function classifyKey(error: unknown): KeyCheck {
 	if (!(error instanceof APIError)) {
 		return { outcome: "unknown", reason: describe(error) };
@@ -125,11 +54,12 @@ export function classifyKey(error: unknown): KeyCheck {
 	return { outcome: "valid" };
 }
 
-export async function brandByDomain(
+export async function contextBrandByDomain(
+	key: string,
 	domain: string,
 	maxAgeMs?: number,
 ): Promise<LookupResult> {
-	return lookup({
+	return lookup(key, {
 		type: "by_domain",
 		domain,
 		timeoutMS: TIMEOUT_MS,
@@ -137,98 +67,40 @@ export async function brandByDomain(
 	});
 }
 
-export async function brandByEmail(email: string): Promise<LookupResult> {
-	return lookup({ type: "by_email", email, timeoutMS: TIMEOUT_MS });
-}
-
-export async function prefetch(domain: string): Promise<void> {
-	const api = await contextDev();
-	if (!api) return;
-
-	try {
-		await api.utility.prefetch({ type: "brand", identifier: { domain } });
-	} catch {}
-}
-
-export async function extract(
+export async function contextExtract(
+	key: string,
 	url: string,
 	schema: Record<string, unknown>,
 	instructions: string,
-): Promise<
-	{ outcome: "found"; data: unknown } | { outcome: "failed"; reason: string }
-> {
-	const api = await contextDev();
-	if (!api) {
-		return { outcome: "failed", reason: "Context.dev is not configured." };
-	}
-
+): Promise<StructuredResearchResult<unknown>> {
 	try {
-		const response = await api.web.extract({
+		const response = await contextDev(key).web.extract({
 			url,
 			schema,
 			instructions,
 			maxPages: 8,
 			timeoutMS: TIMEOUT_MS,
 		});
-		return { outcome: "found", data: response.data };
-	} catch (error) {
-		return { outcome: "failed", reason: describe(error) };
-	}
-}
-
-export async function search(
-	query: string,
-	options: { limit?: number; excludeDomains?: string[] } = {},
-): Promise<
-	| { outcome: "found"; results: SearchResult[] }
-	| { outcome: "failed"; reason: string }
-> {
-	const api = await contextDev();
-	if (!api) {
-		return { outcome: "failed", reason: "Context.dev is not configured." };
-	}
-
-	try {
-		const response = await api.web.search({
-			query,
-			numResults: Math.max(options.limit ?? 10, 10),
-			markdownOptions: { enabled: true },
-			...(options.excludeDomains
-				? { excludeDomains: options.excludeDomains }
-				: {}),
-		});
-
-		const results = (response.results ?? []).map((result) => ({
-			url: result.url ?? null,
-			title: result.title ?? null,
-			description: result.description ?? null,
-			markdown:
-				result.markdown?.code === "SUCCESS"
-					? (result.markdown.markdown ?? null)
-					: null,
-		}));
-
-		return { outcome: "found", results };
+		return { outcome: "found", source: "context.dev", data: response.data };
 	} catch (error) {
 		return { outcome: "failed", reason: describe(error) };
 	}
 }
 
 async function lookup(
+	key: string,
 	params: Parameters<ContextDev["brand"]["retrieve"]>[0],
 ): Promise<LookupResult> {
-	const api = await contextDev();
-	if (!api) {
-		return { outcome: "skipped", reason: "Context.dev is not configured." };
-	}
-
 	try {
-		const response = await api.brand.retrieve(params);
+		const response = await contextDev(key).brand.retrieve(params);
 		const brand = response.brand as Brand | undefined;
-
 		if (!brand) return { outcome: "skipped", reason: "No brand matched." };
-
-		return { outcome: "found", brand, raw: response };
+		return {
+			outcome: "found",
+			source: "context.dev",
+			brand,
+			raw: response,
+		};
 	} catch (error) {
 		return classify(error);
 	}
@@ -240,7 +112,6 @@ function classify(error: unknown): LookupResult {
 	}
 
 	const code = errorCode(error);
-
 	if (error.status === 400) {
 		if (code === "NOT_FOUND" || code === "WEBSITE_ACCESS_ERROR") {
 			return {

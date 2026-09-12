@@ -16,12 +16,14 @@ export default defineDynamic({
 					contactId: asString(attributes.contactId),
 					companyId: asString(attributes.companyId),
 					dealId: asString(attributes.dealId),
+					emailThreadId: asString(attributes.emailThreadId),
 				},
 				{
 					dispatched: Boolean(kind),
 					kind,
 					reason: asString(attributes.reason),
 					budget,
+					allowCreate: asBoolean(attributes.allowCreate),
 				},
 			);
 
@@ -39,4 +41,8 @@ function asString(value: unknown): string | null {
 function asNumber(value: unknown): number | null {
 	const parsed = typeof value === "string" ? Number(value) : value;
 	return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null;
+}
+
+function asBoolean(value: unknown): boolean {
+	return value === true || value === "true";
 }

@@ -8,16 +8,22 @@ import {
 	it,
 } from "bun:test";
 import { db, type Prisma } from "@crm/db";
+import { credentialCipher } from "@crm/db/credentials";
 import {
 	DEFAULT_AGENT_MODEL,
 	readAgentModel,
 	SETTINGS_ID,
 	writeAgentModel,
 } from "@crm/db/settings";
-import { selectedModel } from "../agent/lib/model";
+import { activeModel, selectedModel } from "../agent/lib/model";
+
+const providerId = `model-provider-${process.env.TEST_RUN_ID ?? "integration"}`;
+const originalEncryptionKey = process.env.CREDENTIALS_ENCRYPTION_KEY;
+const testEncryptionKey = Buffer.alloc(32, 7).toString("base64");
 
 async function clear() {
 	await db.appSetting.deleteMany({ where: { id: SETTINGS_ID } });
+	await db.agentModelProvider.deleteMany({ where: { id: providerId } });
 }
 
 /**
@@ -36,6 +42,11 @@ afterEach(clear);
 
 afterAll(async () => {
 	if (saved) await db.appSetting.create({ data: saved });
+	if (originalEncryptionKey === undefined) {
+		delete process.env.CREDENTIALS_ENCRYPTION_KEY;
+	} else {
+		process.env.CREDENTIALS_ENCRYPTION_KEY = originalEncryptionKey;
+	}
 });
 
 describe("the configured model", () => {
@@ -58,6 +69,32 @@ describe("the configured model", () => {
 			model: "anthropic/claude-sonnet-5",
 			modelContextWindowTokens: 200_000,
 		});
+	});
+
+	it("resolves the active direct provider before the legacy model", async () => {
+		process.env.CREDENTIALS_ENCRYPTION_KEY = testEncryptionKey;
+		const cipher = credentialCipher(testEncryptionKey);
+		if (!cipher) throw new Error("The test credential cipher is unavailable.");
+		await db.agentModelProvider.create({
+			data: {
+				id: providerId,
+				name: "Test provider",
+				kind: "custom",
+				protocol: "openai-chat",
+				baseUrl: "https://provider.example/v1",
+				encryptedApiKey: cipher.encrypt("test-key"),
+				apiKeyHint: "••••-key",
+				modelId: "custom-model",
+				contextWindowTokens: 64_000,
+				activeSetting: { create: { id: SETTINGS_ID } },
+			},
+		});
+
+		const model = await activeModel();
+		expect(typeof model).not.toBe("string");
+		if (typeof model !== "string") {
+			expect(model.modelId).toBe("custom-model");
+		}
 	});
 
 	it("goes back to the fallback when the choice is cleared", async () => {

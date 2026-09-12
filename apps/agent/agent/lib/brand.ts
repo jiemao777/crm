@@ -1,7 +1,7 @@
 import { db, EnrichmentStatus } from "@crm/db";
 import { mirrorBrandImages } from "./brand-images";
 import { brandToUpdate, filledFields, stillFillable } from "./brand-mapping";
-import { brandByDomain, contextDevEnabled } from "./context-dev";
+import { brandByDomain, researchProviderEnabled } from "./research-provider";
 
 export type BrandResult = {
 	enriched: boolean;
@@ -57,9 +57,9 @@ export async function runBrand({
 
 	if (!company) return { enriched: false, reason: "No such company." };
 
-	if (!(await contextDevEnabled())) {
+	if (!(await researchProviderEnabled())) {
 		const reason =
-			"Context.dev is not configured, so there is nowhere to look.";
+			"Company research is not configured, so there is nowhere to look.";
 		await settle(companyId, EnrichmentStatus.SKIPPED, reason);
 		return { enriched: false, reason };
 	}
@@ -122,8 +122,16 @@ export async function runBrand({
 
 		await tx.companyEnrichment.upsert({
 			where: { companyId },
-			create: { companyId, raw: result.raw as object },
-			update: { raw: result.raw as object, fetchedAt: new Date() },
+			create: {
+				companyId,
+				source: result.source,
+				raw: result.raw as object,
+			},
+			update: {
+				source: result.source,
+				raw: result.raw as object,
+				fetchedAt: new Date(),
+			},
 		});
 
 		return filledFields(data);
@@ -151,7 +159,7 @@ export function brandOutcome(result: BrandResult): string {
 	const mirrored = result.mirrored ?? [];
 
 	if (filled.length === 0) {
-		return "Everything Context.dev returned was already on the record.";
+		return "Everything the research provider returned was already on the record.";
 	}
 
 	return `Filled ${filled.join(", ")}.${mirrored.length > 0 ? ` Copied ${mirrored.length} image(s) in-house.` : ""}`;

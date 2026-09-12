@@ -1,9 +1,9 @@
 import "@crm/env/load";
 
-import { db } from "@crm/db";
-import { readContextDevKey } from "@crm/db/settings";
+import type { ResearchProviderKind } from "@crm/db/research-provider";
+import { activeResearchProviderKind } from "./research-provider";
 
-export const CONTEXT_DEV = "CONTEXT_DEV";
+export const RESEARCH_PROVIDER = "RESEARCH_PROVIDER";
 
 export type Capability = {
 	readonly id: string;
@@ -13,26 +13,12 @@ export type Capability = {
 	readonly from: string;
 };
 
-export async function contextDevKey(): Promise<string | null> {
-	try {
-		return await readContextDevKey(db);
-	} catch (error) {
-		console.error(
-			`[agent] could not read the Context.dev key from the database: ${
-				error instanceof Error ? error.message : String(error)
-			}`,
-		);
-
-		return null;
-	}
-}
-
 export async function capabilities(): Promise<readonly Capability[]> {
-	return capabilitiesFrom(await contextDevKey());
+	return capabilitiesFrom(await activeResearchProviderKind());
 }
 
 export function capabilitiesFrom(
-	contextDev: string | null,
+	researchProvider: ResearchProviderKind | null,
 ): readonly Capability[] {
 	const fromEnv = (id: string) => ({
 		id,
@@ -54,11 +40,17 @@ export function capabilitiesFrom(
 				"open-web context with citations, and the search that finds a LinkedIn slug in the first place",
 		},
 		{
-			id: CONTEXT_DEV,
+			id: RESEARCH_PROVIDER,
 			from: "Settings → General",
-			label: "Company brand data",
-			gives: "a company's logo, industry, location and socials from its domain",
-			enabled: contextDev !== null,
+			label:
+				researchProvider === "tavily"
+					? "Company web research"
+					: "Company brand data",
+			gives:
+				researchProvider === "tavily"
+					? "current website evidence and company summaries from Tavily"
+					: "a company's logo, industry, location and socials from its domain",
+			enabled: researchProvider !== null,
 		},
 		{
 			...fromEnv("BLOB_READ_WRITE_TOKEN"),

@@ -1,11 +1,33 @@
 import { EnrichmentStatus } from "@crm/db";
+import {
+	AGENT_PROVIDER_KINDS,
+	AGENT_PROVIDER_PROTOCOLS,
+} from "@crm/db/agent-provider";
+import { RESEARCH_PROVIDER_KINDS } from "@crm/db/research-provider";
 import { defineChannel, POST } from "eve/channels";
-import { verifyKey } from "../lib/context-dev";
+import { z } from "zod";
 import { brief, drainAll, taskAuth } from "../lib/dispatch";
 import { settle } from "../lib/enrichment";
+import { extractLead } from "../lib/lead-extract";
+import { verifyModelProvider } from "../lib/model-provider";
+import { verifyResearchProvider } from "../lib/research-provider";
 import { completeTask, taskSubject } from "../lib/tasks";
 
 const TASK_MARKER = "task:";
+
+const researchProviderSchema = z.object({
+	kind: z.enum(RESEARCH_PROVIDER_KINDS),
+	apiKey: z.string().trim().min(1).max(2_000).nullable(),
+});
+
+const modelProviderSchema = z.object({
+	kind: z.enum(AGENT_PROVIDER_KINDS),
+	protocol: z.enum(AGENT_PROVIDER_PROTOCOLS),
+	baseUrl: z.string().url().nullable(),
+	apiKey: z.string().max(2_000).nullable(),
+	modelId: z.string().min(1).max(200),
+	contextWindowTokens: z.number().int().min(4_096).max(10_000_000),
+});
 
 function authorised(request: Request): boolean {
 	const secret = process.env.AGENT_BRIDGE_SECRET?.trim();
@@ -47,26 +69,92 @@ export default defineChannel({
 			return new Response(null, { status: 202 });
 		}),
 
-		POST("/internal/crm/verify-key", async (request) => {
+		POST("/internal/crm/verify-research-provider", async (request) => {
+			if (!authorised(request)) {
+				return new Response("Unauthorized", { status: 401 });
+			}
+
+			const parsed = researchProviderSchema.safeParse(
+				await request.json().catch(() => null),
+			);
+			if (!parsed.success) {
+				return Response.json(
+					{ outcome: "invalid", reason: "Invalid research provider." },
+					{ status: 400 },
+				);
+			}
+
+			if (parsed.data.kind === "context") {
+				if (!parsed.data.apiKey) {
+					return Response.json(
+						{ outcome: "invalid", reason: "Context requires an API key." },
+						{ status: 400 },
+					);
+				}
+				return Response.json(
+					await verifyResearchProvider({
+						kind: "context",
+						apiKey: parsed.data.apiKey,
+					}),
+				);
+			}
+
+			return Response.json(
+				await verifyResearchProvider({
+					kind: "tavily",
+					apiKey: parsed.data.apiKey,
+				}),
+			);
+		}),
+
+		POST("/internal/crm/verify-model-provider", async (request) => {
+			if (!authorised(request)) {
+				return new Response("Unauthorized", { status: 401 });
+			}
+
+			const parsed = modelProviderSchema.safeParse(
+				await request.json().catch(() => null),
+			);
+			if (!parsed.success) {
+				return Response.json(
+					{
+						outcome: "invalid",
+						reason: "invalid-configuration",
+					},
+					{ status: 400 },
+				);
+			}
+
+			return Response.json(await verifyModelProvider(parsed.data));
+		}),
+
+		POST("/internal/crm/extract-lead", async (request) => {
 			if (!authorised(request)) {
 				return new Response("Unauthorized", { status: 401 });
 			}
 
 			const body = (await request.json().catch(() => null)) as {
-				apiKey?: unknown;
+				text?: unknown;
 			} | null;
+			const text = typeof body?.text === "string" ? body.text.trim() : "";
 
-			const apiKey =
-				typeof body?.apiKey === "string" ? body.apiKey.trim() : null;
-
-			if (!apiKey) {
+			if (!text || text.length > 10_000) {
 				return Response.json(
-					{ outcome: "invalid", reason: "No API key was sent." },
+					{ error: "Lead text must contain between 1 and 10000 characters." },
 					{ status: 400 },
 				);
 			}
 
-			return Response.json(await verifyKey(apiKey));
+			try {
+				return Response.json({ result: await extractLead(text) });
+			} catch (error) {
+				console.error(
+					`[agent] lead extraction failed: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				);
+				return Response.json({ result: null }, { status: 503 });
+			}
 		}),
 	],
 

@@ -92,6 +92,9 @@ function task(overrides: Partial<LeasedTask> = {}): LeasedTask {
 		id: "task_1",
 		contactId: "contact_1",
 		companyId: null,
+		emailThreadId: null,
+		userId: null,
+		allowCreate: false,
 		kind: "identify",
 		reason: "A new contact",
 		budget: 4,
@@ -124,6 +127,25 @@ describe("taskAuth", () => {
 		const auth = taskAuth(task({ contactId: null, companyId: "company_1" }));
 
 		expect(auth.attributes).not.toHaveProperty("contactId");
+	});
+
+	it("carries an email filing task's thread, actor and creation policy", () => {
+		const auth = taskAuth(
+			task({
+				contactId: null,
+				emailThreadId: "thread_1",
+				userId: "user_1",
+				allowCreate: true,
+				kind: "mail-intake",
+			}),
+		);
+
+		expect(auth.attributes).toMatchObject({
+			taskKind: "mail-intake",
+			emailThreadId: "thread_1",
+			userId: "user_1",
+			allowCreate: "true",
+		});
 	});
 
 	it("prefers the principal eve hands the schedule over our own copy", () => {

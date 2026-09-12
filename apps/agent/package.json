@@ -17,8 +17,13 @@
 		"clean": "rm -rf .turbo .eve node_modules"
 	},
 	"dependencies": {
+		"@ai-sdk/anthropic": "^4.0.0",
+		"@ai-sdk/gateway": "^4.0.0",
+		"@ai-sdk/google": "^4.0.0",
+		"@ai-sdk/openai": "^4.0.32",
 		"@crm/db": "workspace:*",
 		"@crm/env": "workspace:*",
+		"ai": "^7.0.55",
 		"context.dev": "^2.7.0",
 		"eve": "^0.29.4",
 		"zod": "^4.4.3"

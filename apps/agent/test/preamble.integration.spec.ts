@@ -74,7 +74,7 @@ beforeAll(async () => {
 			name: `Fernhill platform ${suffix}`,
 			companyId,
 			ownerId: user.id,
-			stage: DealStage.CONTRACT_SENT,
+			stage: DealStage.PROFORMA_INVOICE,
 			amount: 48_000,
 			contacts: { create: [{ contactId: paulaId, role: "Champion" }] },
 		},
@@ -116,7 +116,7 @@ describe("companyPreamble", () => {
 		const { markdown, focus } = await companyPreamble(companyId, rep);
 
 		expect(markdown).toContain(`company id \`${companyId}\``);
-		expect(markdown).toContain(`(CONTRACT_SENT) \`${dealId}\``);
+		expect(markdown).toContain(`(PROFORMA_INVOICE) \`${dealId}\``);
 		expect(focus).toEqual({ companyId });
 	});
 
@@ -138,7 +138,7 @@ describe("contactPreamble", () => {
 	it("lists the deals they are on", async () => {
 		const { markdown } = await contactPreamble(paulaId, rep);
 
-		expect(markdown).toContain(`(CONTRACT_SENT, Champion) \`${dealId}\``);
+		expect(markdown).toContain(`(PROFORMA_INVOICE, Champion) \`${dealId}\``);
 	});
 
 	it("offers a way out when they have no company", async () => {
@@ -155,11 +155,11 @@ describe("contactPreamble", () => {
 });
 
 describe("dealPreamble", () => {
-	it("carries the deal, the company and the people, all with ids", async () => {
+	it("carries the inquiry, customer and people, all with ids", async () => {
 		const { markdown, focus } = await dealPreamble(dealId, rep);
 
-		expect(markdown).toContain(`deal id \`${dealId}\``);
-		expect(markdown).toContain(`company id \`${companyId}\``);
+		expect(markdown).toContain(`inquiry id \`${dealId}\``);
+		expect(markdown).toContain(`customer id \`${companyId}\``);
 		expect(markdown).toContain(`Champion \`${paulaId}\``);
 		expect(focus).toEqual({ companyId });
 	});

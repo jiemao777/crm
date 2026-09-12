@@ -1,5 +1,5 @@
 import type { Prisma } from "@crm/db";
-import type { Brand } from "./context-dev";
+import type { Brand } from "./research-types";
 
 export type BrandUpdate = Prisma.CompanyUpdateInput;
 

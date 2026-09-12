@@ -67,7 +67,7 @@ beforeAll(async () => {
 			name: `Northwind renewal ${suffix}`,
 			companyId: northwindId,
 			ownerId: user.id,
-			stage: DealStage.QUALIFIED_TO_BUY,
+			stage: DealStage.RFQ_RECEIVED,
 			amount: 12_000,
 		},
 		select: { id: true },

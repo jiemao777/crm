@@ -125,6 +125,9 @@ export function taskAuth(task: LeasedTask, base: AppAuth = APP_AUTH): AppAuth {
 			budget: String(task.budget),
 			...(task.contactId ? { contactId: task.contactId } : {}),
 			...(task.companyId ? { companyId: task.companyId } : {}),
+			...(task.emailThreadId ? { emailThreadId: task.emailThreadId } : {}),
+			...(task.userId ? { userId: task.userId } : {}),
+			...(task.emailThreadId ? { allowCreate: String(task.allowCreate) } : {}),
 		},
 	};
 }
@@ -154,6 +157,8 @@ function work(kind: string, reason: string): string {
 			return "Bring this contact's record up to date: their background, their current role, and anything that has changed since we last looked.";
 		case "meeting-prep":
 			return "There is a meeting with this person soon. Make sure whoever is taking it opens the record knowing who they are dealing with.";
+		case "mail-intake":
+			return "Classify this email thread and file it against an existing CRM record only when the messages prove the match. Leave it unlinked when they do not.";
 		case "company-profile":
 			return "This company's brand, industry, location and links are filled in separately and may already be there. Read the account, fill anything still missing, and write a brief if there is something worth saying.";
 		case "workspace-profile":

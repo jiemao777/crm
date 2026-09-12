@@ -4,7 +4,7 @@ import {
 	type CompanySnapshot,
 	stillFillable,
 } from "../agent/lib/brand-mapping";
-import type { Brand } from "../agent/lib/context-dev";
+import type { Brand } from "../agent/lib/research-types";
 
 function emptyCompany(
 	overrides: Partial<CompanySnapshot> = {},
