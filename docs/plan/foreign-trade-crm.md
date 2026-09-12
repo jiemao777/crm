@@ -170,12 +170,15 @@ every side can reach. Locally: `docker compose up -d`, `bun run db:deploy`,
 in `.env.example` and `docs/environment.md`; anything a self-hoster might not
 have is optional and removes a capability rather than throwing.
 
-## Known gaps, on purpose
+## Intelligence and known gaps
 
-- **Inquiry intelligence is not built.** No `dealScore`, no forecast context;
-  the schema has neither. That is the next planned feature — a health number
-  and a rolling timeline summary per inquiry, computed off the request path
-  by the agent infrastructure that already exists.
+- **Inquiry intelligence is built.** Each open inquiry carries a deterministic
+  health score (`score`, computed from stage age, activity recency, contact
+  coverage and completeness — `packages/db/src/inquiry-score.ts`), a
+  model-written rationale (`scoreSummary`) and a rolling forecast summary
+  (`forecastContext`, with `forecastContextManual` winning in the UI when a rep
+  overrides it). Recomputed by the `inquiry-intelligence` agent task on stage
+  change, proforma conversion and new mail, plus a nightly sweep schedule.
 - **No agent evals.** `apps/agent/evals` does not exist; extraction quality
   for mail intake and company research has no regression protection beyond
   the unit/integration specs.

@@ -42,6 +42,7 @@ const VERBS: Record<string, string> = {
 	list_outstanding_work: "Looked for outstanding work",
 	create_company: "Created a customer",
 	file_mail_thread: "Filed an email thread",
+	write_inquiry_intelligence: "Scored the inquiry and refreshed its forecast",
 
 	load_skill: "Read its instructions for this",
 	web_search: "Searched the web",
