@@ -16,7 +16,9 @@
 		"postinstall": "node scripts/chmod-trpc-binary.mjs",
 		"start": "bun src/main.ts",
 		"start:prod": "bun dist/main.js",
-		"test": "bun test",
+		"test": "bun scripts/test-runner.ts",
+		"test:unit": "bun scripts/test-runner.ts unit",
+		"test:integration": "bun scripts/test-runner.ts integration",
 		"test:watch": "bun test --watch",
 		"trpc:generate": "nestjs-trpc generate -e src/app.module.ts -r \"**/*.router.ts\" -o src/generated",
 		"clean": "rm -rf .turbo dist node_modules src/generated"

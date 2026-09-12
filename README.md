@@ -310,7 +310,9 @@ short version:
 | --- | --- |
 | `bun run dev` | Everything, in watch mode |
 | `bun run build` | Build all apps and packages |
-| `bun run test` | Run the test suite |
+| `bun run test` | Run the test suite. Specs that need Postgres are skipped with a note when it is unreachable. |
+| `bun run test:unit` | Only the specs that run without Postgres |
+| `bun run test:integration` | Only the specs that need Postgres (`docker compose up -d` first) |
 | `bun run check-types` | `tsc --noEmit` everywhere |
 | `bun run lint` / `format` | [Biome](https://biomejs.dev) |
 | `bun run db:migrate` | Create and apply a migration |

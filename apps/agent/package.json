@@ -12,7 +12,9 @@
 		"build": "eve build",
 		"start": "eve start",
 		"check-types": "tsc --noEmit",
-		"test": "bun test",
+		"test": "bun scripts/test-runner.ts",
+		"test:unit": "bun scripts/test-runner.ts unit",
+		"test:integration": "bun scripts/test-runner.ts integration",
 		"lint": "biome check .",
 		"clean": "rm -rf .turbo .eve node_modules"
 	},

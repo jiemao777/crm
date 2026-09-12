@@ -10,6 +10,8 @@
 		"format": "biome format --write .",
 		"check-types": "turbo run check-types",
 		"test": "turbo run test",
+		"test:unit": "turbo run test:unit",
+		"test:integration": "turbo run test:integration",
 		"auth:generate": "turbo run auth:generate",
 		"db:deploy": "turbo run db:deploy",
 		"db:generate": "turbo run db:generate",
