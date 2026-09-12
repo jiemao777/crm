@@ -19,6 +19,7 @@ import { ToggleGroup, ToggleGroupItem } from "@crm/ui/components/toggle-group";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { type TranslationKey, useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import { ActivityIcon, activityLabel } from "./activity-icon";
@@ -28,20 +29,20 @@ const TYPES = ["NOTE", "CALL", "EMAIL", "MEETING", "TASK"] as const;
 
 type ComposableType = (typeof TYPES)[number];
 
-const dueFormat = new Intl.DateTimeFormat(undefined, {
-	month: "short",
-	day: "numeric",
-});
-
-const PLACEHOLDER: Record<ComposableType, string> = {
-	NOTE: "Log a note, call, email, meeting or task…",
-	CALL: "What came out of the call?",
-	EMAIL: "What was said?",
-	MEETING: "What came out of the meeting?",
-	TASK: "What needs doing?",
+const PLACEHOLDER: Record<ComposableType, TranslationKey> = {
+	NOTE: "timeline.placeholder.note",
+	CALL: "timeline.placeholder.call",
+	EMAIL: "timeline.placeholder.email",
+	MEETING: "timeline.placeholder.meeting",
+	TASK: "timeline.placeholder.task",
 };
 
 export function ActivityComposer({ anchor }: { anchor: TimelineAnchor }) {
+	const { language, locale, t } = useLanguage();
+	const dueFormat = new Intl.DateTimeFormat(locale, {
+		month: "short",
+		day: "numeric",
+	});
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -89,8 +90,8 @@ export function ActivityComposer({ anchor }: { anchor: TimelineAnchor }) {
 				<InputGroupTextarea
 					value={draft}
 					onChange={(event) => setDraft(event.target.value)}
-					placeholder={PLACEHOLDER[type]}
-					aria-label="What happened"
+					placeholder={t(PLACEHOLDER[type])}
+					aria-label={t("timeline.whatHappened")}
 					onKeyDown={(event) => {
 						if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
 							event.preventDefault();
@@ -112,10 +113,10 @@ export function ActivityComposer({ anchor }: { anchor: TimelineAnchor }) {
 							<ToggleGroupItem
 								key={option}
 								value={option}
-								aria-label={activityLabel(option)}
+								aria-label={activityLabel(option, language)}
 							>
 								<ActivityIcon type={option} />
-								{activityLabel(option)}
+								{activityLabel(option, language)}
 							</ToggleGroupItem>
 						))}
 					</ToggleGroup>
@@ -125,7 +126,7 @@ export function ActivityComposer({ anchor }: { anchor: TimelineAnchor }) {
 							<PopoverTrigger asChild>
 								<InputGroupButton variant="ghost" size="xs">
 									<Icon icon={Calendar} data-icon="inline-start" />
-									{dueAt ? dueFormat.format(dueAt) : "Due date"}
+									{dueAt ? dueFormat.format(dueAt) : t("timeline.dueDate")}
 								</InputGroupButton>
 							</PopoverTrigger>
 							<PopoverContent size="fit" align="start">
@@ -148,7 +149,14 @@ export function ActivityComposer({ anchor }: { anchor: TimelineAnchor }) {
 							disabled={create.isPending}
 						>
 							{create.isPending ? <Spinner /> : null}
-							{isTask ? "Add task" : `Log ${activityLabel(type).toLowerCase()}`}
+							{isTask
+								? t("timeline.addTask")
+								: t("timeline.log", {
+										type:
+											language === "en"
+												? activityLabel(type, language).toLowerCase()
+												: activityLabel(type, language),
+									})}
 						</InputGroupButton>
 					)}
 				</InputGroupAddon>

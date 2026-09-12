@@ -7,6 +7,7 @@ import { Icon } from "@crm/ui/components/icon";
 import { Spinner } from "@crm/ui/components/spinner";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 
@@ -17,6 +18,7 @@ export function EnrichmentActions({
 	companyId: string;
 	hasDomain: boolean;
 }) {
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -26,8 +28,8 @@ export function EnrichmentActions({
 				await cache.company(companyId);
 				toast.success(
 					result.queued
-						? "Looking it up — this page will update when it finishes."
-						: "Already running.",
+						? t("enrichment.lookupStarted")
+						: t("enrichment.alreadyRunning"),
 				);
 			},
 			onError: (error) => toast.error(error.message),
@@ -38,7 +40,7 @@ export function EnrichmentActions({
 		trpc.companies.research.mutationOptions({
 			onSuccess: async () => {
 				await cache.activity();
-				toast.success("Brief added to the timeline.");
+				toast.success(t("enrichment.briefAdded"));
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -57,7 +59,7 @@ export function EnrichmentActions({
 				) : (
 					<Icon icon={Renew} data-icon="inline-start" />
 				)}
-				<span className="hidden sm:inline">Re-enrich</span>
+				<span className="hidden sm:inline">{t("enrichment.reEnrich")}</span>
 			</Button>
 
 			<Button
@@ -70,13 +72,14 @@ export function EnrichmentActions({
 				) : (
 					<Icon icon={MagicWand} data-icon="inline-start" />
 				)}
-				<span className="hidden sm:inline">Research</span>
+				<span className="hidden sm:inline">{t("enrichment.research")}</span>
 			</Button>
 		</>
 	);
 }
 
 export function ContactEnrichmentAction({ contactId }: { contactId: string }) {
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -84,9 +87,7 @@ export function ContactEnrichmentAction({ contactId }: { contactId: string }) {
 		trpc.contacts.enrich.mutationOptions({
 			onSuccess: async () => {
 				await cache.contact(contactId);
-				toast.success(
-					"Taking another look — this page will update when it finishes.",
-				);
+				toast.success(t("enrichment.contactLookupStarted"));
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -104,7 +105,7 @@ export function ContactEnrichmentAction({ contactId }: { contactId: string }) {
 			) : (
 				<Icon icon={Renew} data-icon="inline-start" />
 			)}
-			<span className="hidden sm:inline">Re-enrich</span>
+			<span className="hidden sm:inline">{t("enrichment.reEnrich")}</span>
 		</Button>
 	);
 }

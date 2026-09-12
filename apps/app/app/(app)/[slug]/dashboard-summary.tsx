@@ -25,11 +25,7 @@ import {
 import { Spinner } from "@crm/ui/components/spinner";
 import { StatusIndicator } from "@crm/ui/components/status-indicator";
 import { TableCell } from "@crm/ui/components/table";
-import {
-	formatCount,
-	formatMoneyCompact,
-	relativeTimeFromIso,
-} from "@crm/ui/lib/format";
+import { formatMoneyCompact } from "@crm/ui/lib/format";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useQueryState } from "nuqs";
@@ -42,6 +38,8 @@ import {
 import { RecordLink } from "@/components/crm/record-sheet/record-link";
 import { useOpenRecord } from "@/components/crm/record-sheet/record-stack";
 import { activityLabel } from "@/components/crm/timeline/activity-icon";
+import { useLanguage } from "@/lib/i18n";
+import { formatRelativeTime } from "@/lib/i18n-core";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import { useWorkspaceUrl } from "@/lib/use-workspace-url";
@@ -51,6 +49,7 @@ import { SalesDashboard } from "./sales-dashboard";
 const CELL = "px-3 py-2.5 align-middle";
 
 export function DashboardSummary() {
+	const { language, t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 	const openRecord = useOpenRecord();
@@ -86,28 +85,44 @@ export function DashboardSummary() {
 	const largestOpenCents = biggestOpen[0]?.amountCents ?? 0;
 
 	const openColumns: SimpleTableColumn[] = [
-		{ header: "Deal" },
-		{ header: "Stage", width: "w-32", className: "hidden lg:table-cell" },
+		{ header: t("dashboard.inquiry") },
 		{
-			srLabel: "Share of the largest",
+			header: t("deal.stage"),
+			width: "w-32",
+			className: "hidden lg:table-cell",
+		},
+		{
+			srLabel: t("dashboard.shareLargest"),
 			width: "w-24",
 			className: "hidden sm:table-cell",
 		},
-		{ header: "Value", width: "w-20", align: "right" },
+		{ header: t("dashboard.value"), width: "w-20", align: "right" },
 	];
 
 	const taskColumns: SimpleTableColumn[] = [
-		{ srLabel: "Done", width: "w-8" },
-		{ header: "Task" },
-		{ header: "Overdue", width: "w-24", align: "right" },
+		{ srLabel: t("common.done"), width: "w-8" },
+		{ header: t("dashboard.task") },
+		{ header: t("dashboard.overdue"), width: "w-24", align: "right" },
 	];
 
 	const activityColumns: SimpleTableColumn[] = [
-		{ header: "Activity" },
-		{ header: "Company", width: "w-44", className: "hidden md:table-cell" },
-		{ header: "Deal", width: "w-48", className: "hidden lg:table-cell" },
-		{ header: "Who", width: "w-32", className: "hidden md:table-cell" },
-		{ header: "When", width: "w-20", align: "right" },
+		{ header: t("dashboard.activity") },
+		{
+			header: t("common.company"),
+			width: "w-44",
+			className: "hidden md:table-cell",
+		},
+		{
+			header: t("dashboard.inquiry"),
+			width: "w-48",
+			className: "hidden lg:table-cell",
+		},
+		{
+			header: t("dashboard.who"),
+			width: "w-32",
+			className: "hidden md:table-cell",
+		},
+		{ header: t("dashboard.when"), width: "w-20", align: "right" },
 	];
 
 	return (
@@ -117,20 +132,22 @@ export function DashboardSummary() {
 			<div className="grid gap-6 @3xl/page-content:grid-cols-2">
 				<Card className="min-w-0">
 					<CardHeader>
-						<CardTitle>Deals in progress</CardTitle>
+						<CardTitle>{t("dashboard.activeInquiries")}</CardTitle>
 						<CardDescription>
-							The largest open deals, and how long each has sat in its stage
+							{t("dashboard.activeInquiriesDescription")}
 						</CardDescription>
 						<CardAction>
 							<Button asChild variant="contrast" size="sm">
-								<Link href={workspaceUrl("/deals")}>Open deals</Link>
+								<Link href={workspaceUrl("/deals")}>
+									{t("dashboard.openInquiries")}
+								</Link>
 							</Button>
 						</CardAction>
 					</CardHeader>
 					<CardPanel>
 						{biggestOpen.length === 0 ? (
 							<CardPanelEmpty>
-								Nothing open. Time to fill the pipeline.
+								{t("dashboard.noActiveInquiries")}
 							</CardPanelEmpty>
 						) : (
 							<SimpleTable variant="panel" surface="page" columns={openColumns}>
@@ -144,7 +161,7 @@ export function DashboardSummary() {
 											<DealCell
 												name={deal.name}
 												company={deal.company}
-												meta={relativeTimeFromIso(deal.stageChangedAt)}
+												meta={formatRelativeTime(deal.stageChangedAt, language)}
 											/>
 										</TableCell>
 										<TableCell className={`${CELL} hidden lg:table-cell`}>
@@ -176,16 +193,18 @@ export function DashboardSummary() {
 
 				<Card className="min-w-0">
 					<CardHeader>
-						<CardTitle>Overdue tasks</CardTitle>
+						<CardTitle>{t("dashboard.overdueTasks")}</CardTitle>
 						<CardDescription>
 							{overdueTasks.length === 0
-								? "Every task you have logged is either done or still to come"
-								: `${formatCount(overdueTasks.length, "task")} past due`}
+								? t("dashboard.noOverdueDescription")
+								: t("dashboard.tasksPastDue", {
+										count: overdueTasks.length,
+									})}
 						</CardDescription>
 					</CardHeader>
 					<CardPanel>
 						{overdueTasks.length === 0 ? (
-							<CardPanelEmpty>Nothing overdue. Good.</CardPanelEmpty>
+							<CardPanelEmpty>{t("dashboard.noOverdue")}</CardPanelEmpty>
 						) : (
 							<SimpleTable variant="panel" surface="page" columns={taskColumns}>
 								{overdueTasks.map((task) => (
@@ -194,7 +213,7 @@ export function DashboardSummary() {
 											<Checkbox
 												checked={false}
 												disabled={complete.isPending}
-												aria-label="Mark as done"
+												aria-label={t("dashboard.markDone")}
 												onCheckedChange={() =>
 													complete.mutate({ id: task.id, completed: true })
 												}
@@ -219,7 +238,7 @@ export function DashboardSummary() {
 										<TableCell className={`${CELL} text-right`}>
 											<StatusIndicator
 												tone="error"
-												label={relativeTimeFromIso(task.dueAt)}
+												label={formatRelativeTime(task.dueAt, language)}
 											/>
 										</TableCell>
 									</SimpleTableRow>
@@ -233,28 +252,32 @@ export function DashboardSummary() {
 			<Card className="min-w-0">
 				<CardHeader>
 					<CardTitle>
-						{mine ? "Your recent activity" : "Recent activity"}
+						{mine
+							? t("dashboard.yourRecentActivity")
+							: t("dashboard.recentActivity")}
 					</CardTitle>
 					<CardDescription>
 						{mine
-							? "Every note, task and stage change you have logged"
-							: "Every note, task and stage change across the workspace"}
+							? t("dashboard.yourActivityDescription")
+							: t("dashboard.teamActivityDescription")}
 					</CardDescription>
 					<CardAction>
 						<Button asChild variant="contrast" size="sm">
-							<Link href={workspaceUrl("/companies")}>All companies</Link>
+							<Link href={workspaceUrl("/companies")}>
+								{t("dashboard.allCustomers")}
+							</Link>
 						</Button>
 					</CardAction>
 				</CardHeader>
 				{recentActivity.length === 0 ? (
-					<CardTableEmpty>Nothing has happened yet.</CardTableEmpty>
+					<CardTableEmpty>{t("dashboard.noActivity")}</CardTableEmpty>
 				) : (
 					<SimpleTable columns={activityColumns}>
 						{recentActivity.map((entry) => (
 							<SimpleTableRow key={entry.id}>
 								<TableCell className={CELL}>
 									<span className="truncate">
-										{entry.subject ?? activityLabel(entry.type)}
+										{entry.subject ?? activityLabel(entry.type, language)}
 									</span>
 								</TableCell>
 								<TableCell className={`${CELL} hidden md:table-cell`}>
@@ -284,7 +307,7 @@ export function DashboardSummary() {
 									className={`${CELL} text-right text-muted-foreground`}
 								>
 									<span suppressHydrationWarning>
-										{relativeTimeFromIso(entry.createdAt)}
+										{formatRelativeTime(entry.createdAt, language)}
 									</span>
 								</TableCell>
 							</SimpleTableRow>

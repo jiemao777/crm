@@ -1,17 +1,21 @@
+"use client";
+
 import type { GoogleSyncStatus } from "@crm/db/enums";
 import {
 	StatusIndicator,
 	type StatusTone,
 } from "@crm/ui/components/status-indicator";
+import { useLanguage } from "@/lib/i18n";
+import type { TranslationKey } from "@/lib/i18n-core";
 
 const PRESENTATION: Record<
 	GoogleSyncStatus,
-	{ label: string; tone: StatusTone; busy?: boolean }
+	{ key: TranslationKey; tone: StatusTone; busy?: boolean }
 > = {
-	IDLE: { label: "Connected", tone: "success" },
-	RUNNING: { label: "Syncing", tone: "info", busy: true },
-	NEEDS_RECONNECT: { label: "Reconnect needed", tone: "warning" },
-	FAILED: { label: "Sync failed", tone: "error" },
+	IDLE: { key: "sync.connected", tone: "success" },
+	RUNNING: { key: "sync.syncing", tone: "info", busy: true },
+	NEEDS_RECONNECT: { key: "sync.reconnect", tone: "warning" },
+	FAILED: { key: "sync.failed", tone: "error" },
 };
 
 export function SyncIndicator({
@@ -23,23 +27,25 @@ export function SyncIndicator({
 	title?: string | null;
 	className?: string;
 }) {
+	const { t } = useLanguage();
+
 	if (status === null) {
 		return (
 			<StatusIndicator
 				tone="neutral"
-				label="Not connected"
+				label={t("sync.notConnected")}
 				className={className}
 			/>
 		);
 	}
 
-	const { label, tone, busy } = PRESENTATION[status];
+	const { key, tone, busy } = PRESENTATION[status];
 
 	return (
 		<StatusIndicator
 			tone={tone}
 			busy={busy}
-			label={label}
+			label={t(key)}
 			title={title ?? undefined}
 			className={className}
 		/>

@@ -18,6 +18,7 @@ export type CrmCache = {
 	removed(record: RemovedRecord): Promise<void>;
 	activity(options?: Options): Promise<void>;
 	google(options?: Options): Promise<void>;
+	zoho(options?: Options): Promise<void>;
 	settings(options?: Options): Promise<void>;
 	workspace(options?: Options): Promise<void>;
 	sso(options?: Options): Promise<void>;
@@ -68,6 +69,7 @@ export function useCrmCache(): CrmCache {
 				],
 				[
 					...listKeys(),
+					trpc.companies.duplicates.queryKey(),
 					trpc.contacts.byId.queryKey(),
 					trpc.deals.byId.queryKey(),
 					trpc.dashboard.summary.queryKey(),
@@ -96,6 +98,7 @@ export function useCrmCache(): CrmCache {
 				[
 					...listKeys(),
 					trpc.companies.byId.queryKey(),
+					trpc.deals.orders.pathKey(),
 					...activityKeys(),
 					trpc.dashboard.summary.queryKey(),
 				],
@@ -159,11 +162,24 @@ export function useCrmCache(): CrmCache {
 				options,
 			),
 
+		zoho: (options) =>
+			run(
+				[trpc.google.zohoStatus.queryKey()],
+				[
+					...activityKeys(),
+					...listKeys(),
+					trpc.companies.byId.queryKey(),
+					trpc.contacts.byId.queryKey(),
+					trpc.dashboard.summary.queryKey(),
+				],
+				options,
+			),
+
 		settings: (options) =>
 			run(
 				[
-					trpc.settings.agentModel.queryKey(),
-					trpc.settings.researchKey.queryKey(),
+					trpc.settings.agentProviders.queryKey(),
+					trpc.settings.researchProvider.queryKey(),
 				],
 				[],
 				options,

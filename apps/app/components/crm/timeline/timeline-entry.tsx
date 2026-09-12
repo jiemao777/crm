@@ -2,12 +2,13 @@
 
 import { Checkbox } from "@crm/ui/components/checkbox";
 import { StatusIndicator } from "@crm/ui/components/status-indicator";
-import { relativeTimeFromIso } from "@crm/ui/lib/format";
 import { cn } from "@crm/ui/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { dealStageLabel } from "@/components/crm/deal-stage";
 import { RecordLink } from "@/components/crm/record-sheet/record-link";
+import { useLanguage } from "@/lib/i18n";
+import { formatRelativeTime } from "@/lib/i18n-core";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
@@ -18,11 +19,6 @@ import type { TimelineAnchor } from "./timeline";
 
 export type TimelineEntryData =
 	RouterOutputs["activities"]["timeline"]["entries"][number];
-
-const timeFormat = new Intl.DateTimeFormat(undefined, {
-	hour: "numeric",
-	minute: "2-digit",
-});
 
 function stageChange(meta: Record<string, unknown> | null) {
 	const from = typeof meta?.from === "string" ? meta.from : null;
@@ -43,6 +39,11 @@ export function TimelineEntry({
 	entry: TimelineEntryData;
 	anchor: TimelineAnchor;
 }) {
+	const { language, locale, t } = useLanguage();
+	const timeFormat = new Intl.DateTimeFormat(locale, {
+		hour: "numeric",
+		minute: "2-digit",
+	});
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -65,14 +66,21 @@ export function TimelineEntry({
 	const when = entry.occurredAt ?? entry.createdAt;
 
 	const synced = entry.meta?.synced === true;
+	const source =
+		typeof entry.meta?.source === "string" ? entry.meta.source : null;
 	const author = synced
 		? entry.emailThread
-			? "via Gmail"
-			: "via Calendar"
+			? source === "zoho-imap"
+				? t("timeline.viaZoho")
+				: t("timeline.viaGmail")
+			: t("timeline.viaCalendar")
 		: entry.createdBy.name;
 
 	const headline = change
-		? `${dealStageLabel(change.from as never)} → ${dealStageLabel(change.to as never)}`
+		? `${dealStageLabel(change.from as never, language)} → ${dealStageLabel(
+				change.to as never,
+				language,
+			)}`
 		: entry.subject;
 
 	const here = anchorId(anchor);
@@ -91,13 +99,15 @@ export function TimelineEntry({
 					<Checkbox
 						checked={done}
 						disabled={complete.isPending}
-						aria-label={done ? "Mark as not done" : "Mark as done"}
+						aria-label={
+							done ? t("timeline.markNotDone") : t("timeline.markDone")
+						}
 						onCheckedChange={(checked) =>
 							complete.mutate({ id: entry.id, completed: checked === true })
 						}
 					/>
 				) : (
-					<span role="img" aria-label={activityLabel(entry.type)}>
+					<span role="img" aria-label={activityLabel(entry.type, language)}>
 						<ActivityIcon type={entry.type} />
 					</span>
 				)}
@@ -130,7 +140,7 @@ export function TimelineEntry({
 
 						{!headline && !entry.body ? (
 							<p className="text-muted-foreground">
-								{activityLabel(entry.type)}
+								{activityLabel(entry.type, language)}
 							</p>
 						) : null}
 					</div>
@@ -166,12 +176,16 @@ export function TimelineEntry({
 						{overdue ? (
 							<StatusIndicator
 								tone="error"
-								label={`Overdue ${relativeTimeFromIso(entry.dueAt)}`}
+								label={t("timeline.overdue", {
+									time: formatRelativeTime(entry.dueAt, language),
+								})}
 							/>
 						) : isTask && !done && entry.dueAt ? (
 							<StatusIndicator
 								tone="info"
-								label={`Due ${relativeTimeFromIso(entry.dueAt)}`}
+								label={t("timeline.due", {
+									time: formatRelativeTime(entry.dueAt, language),
+								})}
 							/>
 						) : null}
 

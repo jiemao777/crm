@@ -14,17 +14,11 @@ import {
 import { Icon } from "@crm/ui/components/icon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
 
 export type Conversation = RouterOutputs["conversations"]["list"][number];
-
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-	month: "short",
-	day: "numeric",
-	hour: "numeric",
-	minute: "2-digit",
-});
 
 export function ConversationPicker({
 	conversations,
@@ -39,7 +33,14 @@ export function ConversationPicker({
 	onNew: () => void;
 	busy: boolean;
 }) {
-	const label = current?.title ?? "New conversation";
+	const { locale, t } = useLanguage();
+	const dateFormat = new Intl.DateTimeFormat(locale, {
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+	const label = current?.title ?? t("chat.newConversation");
 
 	return (
 		<div className="flex items-center gap-2 border-b px-5 py-2">
@@ -57,7 +58,7 @@ export function ConversationPicker({
 
 				<DropdownMenuContent align="start" className="w-72">
 					{conversations.length === 0 ? (
-						<DropdownMenuItem disabled>Nothing yet</DropdownMenuItem>
+						<DropdownMenuItem disabled>{t("chat.nothingYet")}</DropdownMenuItem>
 					) : (
 						conversations.map((conversation) => (
 							<DropdownMenuItem
@@ -65,7 +66,7 @@ export function ConversationPicker({
 								onSelect={() => onSelect(conversation)}
 							>
 								<span className="min-w-0 flex-1 truncate">
-									{conversation.title ?? "Untitled"}
+									{conversation.title ?? t("chat.untitled")}
 								</span>
 								<span className="shrink-0 text-muted-foreground text-xs">
 									{dateFormat.format(new Date(conversation.lastMessageAt))}
@@ -77,7 +78,7 @@ export function ConversationPicker({
 					<DropdownMenuSeparator />
 					<DropdownMenuItem onSelect={onNew}>
 						<Icon icon={Add} data-icon="inline-start" />
-						New conversation
+						{t("chat.newConversation")}
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -98,6 +99,7 @@ function Forget({
 	onDone: () => void;
 	busy: boolean;
 }) {
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const conversations = useConversationCache();
 
@@ -106,7 +108,7 @@ function Forget({
 			onSuccess: async () => {
 				await conversations.invalidate();
 				onDone();
-				toast.success("Conversation deleted.");
+				toast.success(t("chat.conversationDeleted"));
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -120,7 +122,7 @@ function Forget({
 			onClick={() => remove.mutate({ id: conversation.id })}
 		>
 			<Icon icon={TrashCan} />
-			<span className="sr-only">Delete this conversation</span>
+			<span className="sr-only">{t("chat.deleteConversation")}</span>
 		</Button>
 	);
 }

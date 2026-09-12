@@ -6,6 +6,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ThemeProvider } from "@/components/theme-provider";
+import { LanguageProvider } from "@/lib/i18n";
+import { getRequestLanguage, getRequestTranslation } from "@/lib/i18n-server";
 import { TRPCReactProvider } from "@/lib/trpc/client";
 
 const fontSans = Geist({
@@ -18,30 +20,34 @@ const fontMono = Geist_Mono({
 	subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-	title: {
-		default: "Comp AI - CRM",
-		template: "%s · Comp AI CRM",
-	},
-	description: "Customer Relationship Management for Comp AI",
-	icons: {
-		icon: [
-			{ url: "/favicon.svg", type: "image/svg+xml" },
-			{ url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },
-		],
-		apple: "/apple-touch-icon.png",
-	},
-	manifest: "/site.webmanifest",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return {
+		title: {
+			default: "Comp AI - CRM",
+			template: "%s · Comp AI CRM",
+		},
+		description: await getRequestTranslation("app.description"),
+		icons: {
+			icon: [
+				{ url: "/favicon.svg", type: "image/svg+xml" },
+				{ url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },
+			],
+			apple: "/apple-touch-icon.png",
+		},
+		manifest: "/site.webmanifest",
+	};
+}
 
-export default function RootLayout({
+export default async function RootLayout({
 	children,
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
+	const language = await getRequestLanguage();
+
 	return (
 		<html
-			lang="en"
+			lang={language === "zh" ? "zh-CN" : "en"}
 			suppressHydrationWarning
 			className={cn(fontSans.variable, fontMono.variable, "h-full antialiased")}
 		>
@@ -49,8 +55,10 @@ export default function RootLayout({
 				<NuqsAdapter>
 					<TRPCReactProvider>
 						<ThemeProvider>
-							<TooltipProvider>{children}</TooltipProvider>
-							<Toaster richColors />
+							<LanguageProvider initialLanguage={language}>
+								<TooltipProvider>{children}</TooltipProvider>
+								<Toaster richColors />
+							</LanguageProvider>
 						</ThemeProvider>
 					</TRPCReactProvider>
 				</NuqsAdapter>

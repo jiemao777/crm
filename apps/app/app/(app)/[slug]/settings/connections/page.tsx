@@ -7,14 +7,17 @@ import {
 	PageShellHeading,
 	PageShellTitle,
 } from "@/components/page-shell";
+import { TranslatedText } from "@/components/translated-text";
+import { getRequestTranslation } from "@/lib/i18n-server";
 import { requireSession } from "@/lib/session";
 import { HydrateClient } from "@/lib/trpc/hydrate";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
 import { GoogleConnection } from "./google-connection";
+import { ZohoConnection } from "./zoho-connection";
 
-export const metadata: Metadata = {
-	title: "Connections",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return { title: await getRequestTranslation("settings.connections") };
+}
 
 export default async function ConnectionsSettingsPage({
 	searchParams,
@@ -29,15 +32,18 @@ export default async function ConnectionsSettingsPage({
 	const [{ error }] = await Promise.all([
 		searchParams,
 		queryClient.prefetchQuery(trpc.google.status.queryOptions()),
+		queryClient.prefetchQuery(trpc.google.zohoStatus.queryOptions()),
 	]);
 
 	return (
 		<PageShell>
 			<PageShellHeader>
 				<PageShellHeading>
-					<PageShellTitle>Connections</PageShellTitle>
+					<PageShellTitle>
+						<TranslatedText k="settings.connections" />
+					</PageShellTitle>
 					<PageShellDescription>
-						Your meetings and email, on the companies they belong to.
+						<TranslatedText k="settings.connectionsDescription" />
 					</PageShellDescription>
 				</PageShellHeading>
 			</PageShellHeader>
@@ -48,6 +54,7 @@ export default async function ConnectionsSettingsPage({
 						<GoogleConnection
 							connectError={Array.isArray(error) ? error[0] : error}
 						/>
+						<ZohoConnection />
 					</div>
 				</HydrateClient>
 			</PageShellContent>

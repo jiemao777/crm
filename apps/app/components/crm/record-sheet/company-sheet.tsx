@@ -46,6 +46,7 @@ import {
 	DetailSheetMain,
 	DetailSheetPending,
 	DetailSheetProperties,
+	DetailSheetProperty,
 	DetailSheetProse,
 	DetailSheetRail,
 	DetailSheetSection,
@@ -54,6 +55,8 @@ import {
 	DetailSheetStats,
 	type DetailSheetTab,
 } from "@/components/detail-sheet";
+import { type TranslationKey, useLanguage } from "@/lib/i18n";
+import { buyerLocalTime, timezoneOptions } from "@/lib/timezones";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
@@ -72,61 +75,32 @@ type CompanyDeal = Company["deals"][number];
 
 const UNASSIGNED = "unassigned";
 
-function pendingFields(company: Company): string[] {
-	const missing: string[] = [];
-	if (!company.industry) missing.push("industry");
-	if (!company.description) missing.push("description");
-	if (!hasCompanyLinks(company)) missing.push("social links");
+function pendingFields(company: Company): TranslationKey[] {
+	const missing: TranslationKey[] = [];
+	if (!company.industry) missing.push("company.industry");
+	if (!company.description) missing.push("company.descriptionField");
+	if (!hasCompanyLinks(company)) missing.push("company.socialLinks");
 	return missing;
 }
 
-function companyConsequence(company: Company): string {
-	const deals = company.deals.length;
+function companyConsequence(
+	company: Company,
+	t: (key: TranslationKey, values?: Record<string, string | number>) => string,
+): string {
+	const inquiries = company.deals.length;
 	const contacts = company.contacts.length;
-
-	const gone =
-		deals > 0
-			? `${deals === 1 ? "Its one deal" : `All ${deals} of its deals`} and everything filed against the account go too.`
-			: "Everything filed against the account goes too.";
-
-	const kept =
-		contacts > 0
-			? ` ${contacts === 1 ? "The one person" : `The ${contacts} people`} who work there stay in the CRM, without a company.`
-			: "";
-
-	return gone + kept;
+	const gone = inquiries
+		? t("delete.companyWithInquiries", { count: inquiries })
+		: t("delete.companyWithoutInquiries");
+	const kept = contacts
+		? t("delete.companyContactsRemain", { count: contacts })
+		: "";
+	return [gone, kept].filter(Boolean).join(" ");
 }
-
-const CONTACT_COLUMNS = [
-	{ srLabel: "Primary", width: "w-10", className: "pl-5" },
-	{ header: "Name", width: "w-[28%]" },
-	{ header: "Title", width: "w-[24%]" },
-	{ header: "Email", width: "w-[26%]" },
-	{ header: "Owner", width: "w-[22%]" },
-];
-
-const DEAL_COLUMNS = [
-	{ header: "Deal", width: "w-[32%]", className: "pl-5" },
-	{ header: "Stage", width: "w-[24%]" },
-	{ header: "Amount", width: "w-[16%]", align: "right" as const },
-	{ header: "Close date", width: "w-[14%]" },
-	{ header: "Owner", width: "w-[14%]" },
-];
-
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-	month: "short",
-	day: "numeric",
-	year: "numeric",
-});
-
-const shortDateFormat = new Intl.DateTimeFormat(undefined, {
-	month: "short",
-	day: "numeric",
-});
 
 function nextClose(deals: CompanyDeal[]): string | null {
 	const dates = deals
-		.map((deal) => deal.expectedCloseDate)
+		.map((deal) => deal.expectedOrderDate)
 		.filter((date): date is string => date !== null)
 		.sort();
 	return dates[0] ?? null;
@@ -159,6 +133,11 @@ function AddRow({
 }
 
 export function CompanySheet({ companyId }: { companyId: string }) {
+	const { locale, t } = useLanguage();
+	const shortDateFormat = new Intl.DateTimeFormat(locale, {
+		month: "short",
+		day: "numeric",
+	});
 	const trpc = useTRPC();
 	const {
 		tab,
@@ -187,17 +166,23 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 
 	const openDeals =
 		company?.deals.filter((deal) => OPEN_STAGES.includes(deal.stage)) ?? [];
-	const openValueCents = openDeals.reduce(
-		(total, deal) => total + (deal.amountCents ?? 0),
-		0,
-	);
+	const openValueByCurrency = [
+		...openDeals.reduce((map, deal) => {
+			const current = map.get(deal.currency) ?? 0;
+			map.set(deal.currency, current + (deal.amountCents ?? 0));
+			return map;
+		}, new Map<string, number>()),
+	]
+		.map(([currency, valueCents]) => ({ currency, valueCents }))
+		.filter((entry) => entry.valueCents !== 0)
+		.sort((a, b) => a.currency.localeCompare(b.currency));
 	const closing = nextClose(openDeals);
 
 	const tabs: DetailSheetTab[] = company
 		? [
 				{
 					value: "overview",
-					label: "Overview",
+					label: t("detail.overview"),
 					content: (
 						<CompanyOverview
 							company={company}
@@ -210,7 +195,7 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 				},
 				{
 					value: "contacts",
-					label: "Contacts",
+					label: t("detail.contacts"),
 					count: company.contacts.length,
 					content: (
 						<CompanyContacts
@@ -223,7 +208,7 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 				},
 				{
 					value: "deals",
-					label: "Deals",
+					label: t("detail.deals"),
 					count: company.deals.length,
 					content: (
 						<CompanyDeals
@@ -236,12 +221,12 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 				},
 				{
 					value: "activity",
-					label: "Activity",
+					label: t("detail.activity"),
 					content: <Timeline anchor={{ companyId: company.id }} />,
 				},
 				{
 					value: "agent",
-					label: "Agent",
+					label: t("detail.agent"),
 					content: <AgentPanel record={{ kind: "company", id: company.id }} />,
 					keepMounted: true,
 				},
@@ -252,7 +237,7 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 		<RecordSheetFrame
 			loading={query.isPending}
 			error={query.error?.message ?? null}
-			title={company?.name ?? "Company"}
+			title={company?.name ?? t("common.company")}
 			description={
 				company ? (
 					<MetaLine
@@ -291,7 +276,7 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 						<RecordActions
 							record={{ kind: "company", id: company.id }}
 							name={company.name}
-							consequence={companyConsequence(company)}
+							consequence={companyConsequence(company, t)}
 						/>
 					</>
 				) : null
@@ -299,22 +284,28 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 			stats={
 				company ? (
 					<DetailSheetStats>
-						<DetailSheetStat label="Open pipeline">
+						<DetailSheetStat label={t("detail.activeValue")}>
 							<span className="tabular-nums">
-								{formatMoney(openValueCents)}
+								{openValueByCurrency.length === 0
+									? formatMoney(0)
+									: openValueByCurrency
+											.map((entry) =>
+												formatMoney(entry.valueCents, entry.currency),
+											)
+											.join(" + ")}
 							</span>
 						</DetailSheetStat>
-						<DetailSheetStat label="Open deals">
+						<DetailSheetStat label={t("detail.activeInquiries")}>
 							<span className="tabular-nums">{openDeals.length}</span>
 						</DetailSheetStat>
-						<DetailSheetStat label="Next close">
+						<DetailSheetStat label={t("detail.expectedOrder")}>
 							{closing ? (
 								shortDateFormat.format(new Date(closing))
 							) : (
 								<EmptyCellValue />
 							)}
 						</DetailSheetStat>
-						<DetailSheetStat label="Owner">
+						<DetailSheetStat label={t("common.owner")}>
 							<OwnerCell owner={company.owner} />
 						</DetailSheetStat>
 					</DetailSheetStats>
@@ -334,8 +325,16 @@ function CompanyOverview({
 	company: Company;
 	onAddContact: () => void;
 }) {
+	const { locale, t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
+	const customerTypeOptions = [
+		{ value: "LEAD", label: t("company.type.lead") },
+		{ value: "BUYER", label: t("company.type.buyer") },
+		{ value: "DISTRIBUTOR", label: t("company.type.distributor") },
+		{ value: "AGENT", label: t("company.type.agent") },
+		{ value: "CUSTOMER", label: t("company.type.customer") },
+	];
 
 	const users = useQuery(trpc.users.list.queryOptions());
 
@@ -356,12 +355,12 @@ function CompanyOverview({
 			<DetailSheetSplit>
 				<DetailSheetMain>
 					{company.description ? (
-						<DetailSheetSection title="About">
+						<DetailSheetSection title={t("detail.about")}>
 							<DetailSheetProse>{company.description}</DetailSheetProse>
 						</DetailSheetSection>
 					) : null}
 
-					<DetailSheetSection title="People">
+					<DetailSheetSection title={t("detail.people")}>
 						<CompanyContacts
 							company={company}
 							adding={false}
@@ -372,16 +371,16 @@ function CompanyOverview({
 				</DetailSheetMain>
 
 				<DetailSheetRail>
-					<DetailSheetSection title="Details">
+					<DetailSheetSection title={t("detail.details")}>
 						<DetailSheetProperties columns={1}>
 							<InlineField
-								label="Name"
+								label={t("company.name")}
 								value={company.name}
 								saving={isSaving("name")}
 								onSave={(name) => name && save({ name })}
 							/>
 							<InlineField
-								label="Domain"
+								label={t("company.domain")}
 								value={company.domain}
 								type="url"
 								placeholder="stripe.com"
@@ -389,44 +388,91 @@ function CompanyOverview({
 								onSave={(domain) => save({ domain })}
 							/>
 							<InlineField
-								label="Website"
+								label={t("company.website")}
 								value={company.website}
 								type="url"
-								placeholder="https://stripe.com"
+								placeholder="https://buyer.example"
 								saving={isSaving("website")}
 								onSave={(website) => save({ website })}
 							/>
+							<InlineSelectField
+								label={t("company.customerType")}
+								value={company.customerType}
+								options={customerTypeOptions}
+								onSave={(customerType) => save({ customerType })}
+							/>
 							<InlineField
-								label="Phone"
+								label={t("company.leadSource")}
+								value={company.leadSource}
+								placeholder="Alibaba, trade show, referral"
+								saving={isSaving("leadSource")}
+								onSave={(leadSource) => save({ leadSource })}
+							/>
+							<InlineField
+								label={t("company.productInterest")}
+								value={company.productInterest}
+								placeholder="Product or category"
+								saving={isSaving("productInterest")}
+								onSave={(productInterest) => save({ productInterest })}
+							/>
+							<InlineField
+								label={t("company.targetMarkets")}
+								value={company.targetMarkets}
+								placeholder="Markets they sell into"
+								saving={isSaving("targetMarkets")}
+								onSave={(targetMarkets) => save({ targetMarkets })}
+							/>
+							<InlineField
+								label={t("common.phone")}
 								value={company.phone}
 								type="tel"
 								saving={isSaving("phone")}
 								onSave={(phone) => save({ phone })}
 							/>
 							<InlineField
-								label="Email"
+								label={t("common.email")}
 								value={company.email}
 								type="email"
 								saving={isSaving("email")}
 								onSave={(email) => save({ email })}
 							/>
 							<InlineField
-								label="City"
+								label={t("company.city")}
 								value={company.city}
 								saving={isSaving("city")}
 								onSave={(city) => save({ city })}
 							/>
 							<InlineField
-								label="Country"
+								label={t("company.country")}
 								value={company.country}
 								saving={isSaving("country")}
 								onSave={(country) => save({ country })}
 							/>
 							<InlineSelectField
-								label="Owner"
+								label={t("company.timezone")}
+								value={company.timezone ?? UNASSIGNED}
+								options={[
+									{ value: UNASSIGNED, label: t("common.unassigned") },
+									...timezoneOptions(),
+								]}
+								onSave={(timezone) =>
+									save({
+										timezone: timezone === UNASSIGNED ? null : timezone,
+									})
+								}
+							/>
+							{company.timezone ? (
+								<DetailSheetProperty label={t("company.localTime")}>
+									<span className="tabular-nums">
+										{buyerLocalTime(company.timezone, locale)}
+									</span>
+								</DetailSheetProperty>
+							) : null}
+							<InlineSelectField
+								label={t("common.owner")}
 								value={company.owner?.id ?? UNASSIGNED}
 								options={[
-									{ value: UNASSIGNED, label: "Unassigned" },
+									{ value: UNASSIGNED, label: t("common.unassigned") },
 									...(users.data ?? []).map((user) => ({
 										value: user.id,
 										label: user.name,
@@ -440,12 +486,12 @@ function CompanyOverview({
 					</DetailSheetSection>
 
 					<DetailSheetPending
-						fields={pendingFields(company)}
+						fields={pendingFields(company).map((key) => t(key))}
 						running={isEnriching(company.enrichmentStatus, company.queued)}
 					/>
 
 					{hasCompanyLinks(company) ? (
-						<DetailSheetSection title="Links">
+						<DetailSheetSection title={t("detail.links")}>
 							<CompanySocials company={company} />
 						</DetailSheetSection>
 					) : null}
@@ -466,6 +512,14 @@ function CompanyContacts({
 	onAdd: () => void;
 	onDone: () => void;
 }) {
+	const { t } = useLanguage();
+	const contactColumns = [
+		{ srLabel: t("contact.primary"), width: "w-10", className: "pl-5" },
+		{ header: t("contact.name"), width: "w-[28%]" },
+		{ header: t("contact.titleField"), width: "w-[24%]" },
+		{ header: t("contact.email"), width: "w-[26%]" },
+		{ header: t("contact.owner"), width: "w-[22%]" },
+	];
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 	const openRecord = useOpenRecord();
@@ -492,12 +546,14 @@ function CompanyContacts({
 				{adding ? null : (
 					<DetailSheetEmpty
 						icon={UserMultiple}
-						title="No contacts yet"
-						description={`Everyone you talk to at ${company.name} lives here — add the first person and their calls, emails and notes hang off them.`}
+						title={t("detail.noContacts")}
+						description={t("company.noContactsDescription", {
+							name: company.name,
+						})}
 						action={
 							<Button variant="outline" size="sm" onClick={onAdd}>
 								<Icon icon={Add} data-icon="inline-start" />
-								Add contact
+								{t("contact.add")}
 							</Button>
 						}
 					/>
@@ -509,7 +565,7 @@ function CompanyContacts({
 	return (
 		<>
 			{form}
-			<SimpleTable variant="panel" columns={CONTACT_COLUMNS}>
+			<SimpleTable variant="panel" columns={contactColumns}>
 				{company.contacts.map((contact) => {
 					const isPrimary = contact.id === company.primaryContactId;
 					return (
@@ -536,12 +592,16 @@ function CompanyContacts({
 										>
 											<Icon icon={isPrimary ? StarFilled : Star} />
 											<span className="sr-only">
-												{isPrimary ? "Primary contact" : "Make primary"}
+												{isPrimary
+													? t("contact.primary")
+													: t("contact.makePrimary")}
 											</span>
 										</Button>
 									</TooltipTrigger>
 									<TooltipContent>
-										{isPrimary ? "Primary contact" : "Make primary"}
+										{isPrimary
+											? t("contact.primary")
+											: t("contact.makePrimary")}
 									</TooltipContent>
 								</Tooltip>
 							</TableCell>
@@ -576,8 +636,8 @@ function CompanyContacts({
 				})}
 
 				<AddRow
-					label="Add contact"
-					columns={CONTACT_COLUMNS.length}
+					label={t("contact.add")}
+					columns={contactColumns.length}
 					onClick={onAdd}
 				/>
 			</SimpleTable>
@@ -596,6 +656,23 @@ function CompanyDeals({
 	onAdd: () => void;
 	onDone: () => void;
 }) {
+	const { locale, t } = useLanguage();
+	const dateFormat = new Intl.DateTimeFormat(locale, {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	});
+	const dealColumns = [
+		{ header: t("deal.inquiry"), width: "w-[32%]", className: "pl-5" },
+		{ header: t("deal.stage"), width: "w-[24%]" },
+		{
+			header: t("deal.amount"),
+			width: "w-[16%]",
+			align: "right" as const,
+		},
+		{ header: t("deal.closeDate"), width: "w-[14%]" },
+		{ header: t("deal.owner"), width: "w-[14%]" },
+	];
 	const openRecord = useOpenRecord();
 
 	const form = adding ? (
@@ -614,12 +691,14 @@ function CompanyDeals({
 				{adding ? null : (
 					<DetailSheetEmpty
 						icon={Partnership}
-						title="No deals yet"
-						description={`Nothing is being sold to ${company.name} right now. Open one and it joins the pipeline and the forecast.`}
+						title={t("detail.noInquiries")}
+						description={t("company.noInquiriesDescription", {
+							name: company.name,
+						})}
 						action={
 							<Button variant="outline" size="sm" onClick={onAdd}>
 								<Icon icon={Add} data-icon="inline-start" />
-								New deal
+								{t("deal.new")}
 							</Button>
 						}
 					/>
@@ -631,7 +710,7 @@ function CompanyDeals({
 	return (
 		<>
 			{form}
-			<SimpleTable variant="panel" columns={DEAL_COLUMNS}>
+			<SimpleTable variant="panel" columns={dealColumns}>
 				{company.deals.map((deal) => (
 					<SimpleTableRow
 						key={deal.id}
@@ -651,8 +730,8 @@ function CompanyDeals({
 							/>
 						</TableCell>
 						<TableCell className="px-3 py-2.5 text-muted-foreground">
-							{deal.expectedCloseDate ? (
-								dateFormat.format(new Date(deal.expectedCloseDate))
+							{deal.expectedOrderDate ? (
+								dateFormat.format(new Date(deal.expectedOrderDate))
 							) : (
 								<EmptyCellValue />
 							)}
@@ -664,8 +743,8 @@ function CompanyDeals({
 				))}
 
 				<AddRow
-					label="New deal"
-					columns={DEAL_COLUMNS.length}
+					label={t("deal.new")}
+					columns={dealColumns.length}
 					onClick={onAdd}
 				/>
 			</SimpleTable>

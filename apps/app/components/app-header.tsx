@@ -22,7 +22,9 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
+import { LanguageMenu } from "@/components/language-menu";
 import { useMobileNav } from "@/components/mobile-nav";
+import { useLanguage } from "@/lib/i18n";
 import { useTRPC } from "@/lib/trpc/client";
 import { useWorkspaceUrl } from "@/lib/use-workspace-url";
 
@@ -44,6 +46,7 @@ export function workspaceLabel(name: string | undefined): string {
 
 export function AppHeader({ user }: { user: User }) {
 	const { setOpen: setMobileNavOpen } = useMobileNav();
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const workspaceUrl = useWorkspaceUrl();
 	const workspace = useQuery(trpc.workspace.get.queryOptions());
@@ -53,7 +56,7 @@ export function AppHeader({ user }: { user: User }) {
 		const { error } = await signOut();
 
 		if (error) {
-			toast.error(error.message ?? "Could not sign out.");
+			toast.error(error.message ?? t("header.signOutFailed"));
 			return;
 		}
 
@@ -67,14 +70,14 @@ export function AppHeader({ user }: { user: User }) {
 					variant="ghost"
 					size="icon"
 					className="md:hidden"
-					aria-label="Open navigation"
+					aria-label={t("header.openNavigation")}
 					onClick={() => setMobileNavOpen(true)}
 				>
 					<Menu />
 				</Button>
 				<Link
 					href={workspaceUrl()}
-					aria-label="Homepage"
+					aria-label={t("header.homepage")}
 					className="hidden size-8 items-center justify-center text-foreground md:flex"
 				>
 					<Logo className="size-5" />
@@ -84,10 +87,11 @@ export function AppHeader({ user }: { user: User }) {
 			</div>
 
 			<div className="ml-auto flex shrink-0 items-center gap-1.5">
+				<LanguageMenu />
 				<UserMenu
 					user={user}
 					onSignOut={() => {
-						handleSignOut().catch(() => toast.error("Could not sign out."));
+						handleSignOut().catch(() => toast.error(t("header.signOutFailed")));
 					}}
 				/>
 			</div>
@@ -98,6 +102,7 @@ export function AppHeader({ user }: { user: User }) {
 function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
 	const { resolvedTheme, setTheme } = useTheme();
 	const isDark = resolvedTheme === "dark";
+	const { t } = useLanguage();
 
 	return (
 		<DropdownMenu>
@@ -105,7 +110,7 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
 				<Button
 					variant="ghost"
 					size="icon"
-					aria-label="Account menu"
+					aria-label={t("header.accountMenu")}
 					className="hover:bg-transparent aria-expanded:bg-transparent dark:hover:bg-transparent"
 				>
 					<Avatar className="size-7">
@@ -129,12 +134,12 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
 					}}
 				>
 					{isDark ? <Light /> : <Asleep />}
-					{isDark ? "Light mode" : "Dark mode"}
+					{isDark ? t("header.lightMode") : t("header.darkMode")}
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem onClick={onSignOut}>
 					<Logout />
-					Sign out
+					{t("header.signOut")}
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

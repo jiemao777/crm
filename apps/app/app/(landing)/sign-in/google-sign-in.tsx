@@ -6,8 +6,10 @@ import { Button } from "@crm/ui/components/button";
 import { Spinner } from "@crm/ui/components/spinner";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 
 export function GoogleSignIn() {
+	const { t } = useLanguage();
 	const [pending, setPending] = useState(false);
 
 	async function handleClick() {
@@ -22,7 +24,7 @@ export function GoogleSignIn() {
 		});
 
 		if (error) {
-			toast.error(error.message ?? "Could not reach the sign-in service.");
+			toast.error(error.message ?? t("signin.serviceFailed"));
 			setPending(false);
 		}
 	}
@@ -40,7 +42,7 @@ export function GoogleSignIn() {
 			) : (
 				<GoogleLogo data-icon="inline-start" className="size-4" />
 			)}
-			Continue with Google
+			{t("signin.google")}
 		</Button>
 	);
 }

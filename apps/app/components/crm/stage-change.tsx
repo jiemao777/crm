@@ -26,11 +26,13 @@ import { useMutation } from "@tanstack/react-query";
 import { parseAsString, useQueryStates } from "nuqs";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import {
 	DEAL_STAGE_OPTIONS,
 	DealStageIndicator,
+	dealStageLabel,
 	LOSING_STAGES,
 } from "./deal-stage";
 
@@ -63,6 +65,7 @@ export function DealStageMenu({
 	stage: DealStage;
 	variant?: "inline" | "control";
 }) {
+	const { language } = useLanguage();
 	const [, setCloseParams] = useQueryStates(closeReasonParams);
 	const setStage = useStageMutation();
 
@@ -112,7 +115,7 @@ export function DealStageMenu({
 				>
 					{DEAL_STAGE_OPTIONS.map((option) => (
 						<DropdownMenuRadioItem key={option.value} value={option.value}>
-							{option.label}
+							{dealStageLabel(option.value, language)}
 						</DropdownMenuRadioItem>
 					))}
 				</DropdownMenuRadioGroup>
@@ -122,6 +125,7 @@ export function DealStageMenu({
 }
 
 export function CloseReasonDialog() {
+	const { t } = useLanguage();
 	const reasonId = useId();
 	const [{ closing, closingStage }, setCloseParams] =
 		useQueryStates(closeReasonParams);
@@ -133,7 +137,7 @@ export function CloseReasonDialog() {
 	};
 
 	const setStage = useStageMutation(() => {
-		toast.success("Deal closed.");
+		toast.success(t("deal.closedSuccess"));
 		close();
 	});
 
@@ -145,12 +149,12 @@ export function CloseReasonDialog() {
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>
-						{stage === "CLOSED_LOST" ? "Close as lost" : "Mark as unqualified"}
+						{stage === "LOST" ? t("deal.markLost") : t("deal.markUnqualified")}
 					</DialogTitle>
 					<DialogDescription>
-						{stage === "CLOSED_LOST"
-							? "What did we lose it to? This is the only place that answer gets recorded."
-							: "Why is this not a fit? It goes on the timeline so nobody re-runs the same deal."}
+						{stage === "LOST"
+							? t("deal.lostDescription")
+							: t("deal.unqualifiedDescription")}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -164,12 +168,12 @@ export function CloseReasonDialog() {
 					}}
 				>
 					<Field>
-						<FieldLabel htmlFor={reasonId}>Reason</FieldLabel>
+						<FieldLabel htmlFor={reasonId}>{t("deal.closedReason")}</FieldLabel>
 						<Textarea
 							id={reasonId}
 							value={reason}
 							onChange={(event) => setReason(event.target.value)}
-							placeholder="Went with an incumbent vendor"
+							placeholder={t("deal.reasonPlaceholder")}
 							rows={3}
 						/>
 					</Field>
@@ -182,10 +186,10 @@ export function CloseReasonDialog() {
 						disabled={setStage.isPending || reason.trim() === ""}
 					>
 						{setStage.isPending ? <Spinner /> : null}
-						Save
+						{t("common.save")}
 					</Button>
 					<Button variant="outline" onClick={close}>
-						Cancel
+						{t("common.cancel")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

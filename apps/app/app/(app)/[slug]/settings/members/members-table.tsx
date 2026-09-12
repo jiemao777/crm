@@ -3,11 +3,6 @@
 import OverflowMenuHorizontal from "@carbon/icons-react/es/OverflowMenuHorizontal";
 import { Button } from "@crm/ui/components/button";
 import {
-	DataTable,
-	type DataTableColumn,
-	type DataTableFacet,
-} from "@crm/ui/components/data-table";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -15,27 +10,35 @@ import {
 } from "@crm/ui/components/dropdown-menu";
 import { Icon } from "@crm/ui/components/icon";
 import { PersonAvatar } from "@crm/ui/components/person-avatar";
-import { relativeTimeFromIso } from "@crm/ui/lib/format";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ListSearch } from "@/components/data-table/list-search";
+import {
+	LocalizedDataTable as DataTable,
+	type DataTableColumn,
+	type DataTableFacet,
+} from "@/components/data-table/localized-data-table";
 import { useTableQuery } from "@/components/data-table/use-table-query";
+import { type TranslationKey, useLanguage } from "@/lib/i18n";
+import { formatRelativeTime, type Language } from "@/lib/i18n-core";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
 import { membersSearchParams } from "./members-search-params";
 
 const ROLE_LABEL = {
-	owner: "Owner",
-	admin: "Admin",
-	member: "Member",
-} as const;
+	owner: "settings.role.owner",
+	admin: "settings.role.admin",
+	member: "settings.role.member",
+} as const satisfies Record<string, TranslationKey>;
 
 type Role = keyof typeof ROLE_LABEL;
 
 type MemberRow = RouterOutputs["workspace"]["members"]["rows"][number];
 
 function columns(
+	t: (key: TranslationKey, values?: Record<string, string | number>) => string,
+	language: Language,
 	canChangeRoles: boolean,
 	onChangeRole: (member: MemberRow, role: Role) => void,
 	pending: boolean,
@@ -43,7 +46,7 @@ function columns(
 	return [
 		{
 			id: "name",
-			header: "Name",
+			header: t("common.name"),
 			sortable: true,
 			hideable: false,
 			width: "w-[34%]",
@@ -57,14 +60,16 @@ function columns(
 					/>
 					<span className="truncate font-medium">{row.name}</span>
 					{row.isViewer ? (
-						<span className="text-muted-foreground text-xs">You</span>
+						<span className="text-muted-foreground text-xs">
+							{t("settings.you")}
+						</span>
 					) : null}
 				</span>
 			),
 		},
 		{
 			id: "email",
-			header: "Email",
+			header: t("common.email"),
 			sortable: true,
 			width: "w-[32%]",
 			hideBelow: "md",
@@ -74,31 +79,31 @@ function columns(
 		},
 		{
 			id: "role",
-			header: "Role",
+			header: t("settings.role"),
 			sortable: true,
 			width: "w-[14%]",
 			cell: (row) => (
-				<span className="text-muted-foreground">{ROLE_LABEL[row.role]}</span>
+				<span className="text-muted-foreground">{t(ROLE_LABEL[row.role])}</span>
 			),
 		},
 		{
 			id: "joinedAt",
-			header: "Joined",
-			label: "Joined date",
+			header: t("settings.joined"),
+			label: t("settings.joinedDate"),
 			sortable: true,
 			align: "right",
 			width: "w-[14%]",
 			hideBelow: "sm",
 			cell: (row) => (
 				<span className="text-muted-foreground" suppressHydrationWarning>
-					{relativeTimeFromIso(row.joinedAt)}
+					{formatRelativeTime(row.joinedAt, language)}
 				</span>
 			),
 		},
 		{
 			id: "actions",
-			header: <span className="sr-only">Actions</span>,
-			label: "Actions",
+			header: <span className="sr-only">{t("settings.actions")}</span>,
+			label: t("settings.actions"),
 			hideable: false,
 			align: "right",
 			width: "w-[6%]",
@@ -108,7 +113,9 @@ function columns(
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" size="icon" disabled={pending}>
 								<Icon icon={OverflowMenuHorizontal} />
-								<span className="sr-only">Change {row.name}'s role</span>
+								<span className="sr-only">
+									{t("settings.changeRole", { name: row.name })}
+								</span>
 							</Button>
 						</DropdownMenuTrigger>
 
@@ -122,7 +129,7 @@ function columns(
 										onChangeRole(row, role);
 									}}
 								>
-									{ROLE_LABEL[role]}
+									{t(ROLE_LABEL[role])}
 								</DropdownMenuItem>
 							))}
 						</DropdownMenuContent>
@@ -133,6 +140,7 @@ function columns(
 }
 
 export function MembersTable() {
+	const { language, t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 	const { query, input } = useTableQuery(membersSearchParams);
@@ -147,7 +155,7 @@ export function MembersTable() {
 		trpc.workspace.setMemberRole.mutationOptions({
 			onSuccess: async () => {
 				await cache.workspace();
-				toast.success("Role changed.");
+				toast.success(t("settings.roleChanged"));
 			},
 			onError: (error) => toast.error(error.message),
 		}),
@@ -158,9 +166,9 @@ export function MembersTable() {
 	const facets: DataTableFacet[] = [
 		{
 			id: "role",
-			label: "Role",
+			label: t("settings.role"),
 			options: (Object.keys(ROLE_LABEL) as Role[])
-				.map((role) => ({ value: role, label: ROLE_LABEL[role] }))
+				.map((role) => ({ value: role, label: t(ROLE_LABEL[role]) }))
 				.filter((option) => (facetCounts?.role?.[option.value] ?? 0) > 0),
 		},
 	];
@@ -168,8 +176,10 @@ export function MembersTable() {
 	return (
 		<DataTable
 			query={query}
-			search={<ListSearch placeholder="Search by name or email…" />}
+			search={<ListSearch placeholder={t("settings.memberSearch")} />}
 			columns={columns(
+				t,
+				language,
 				workspace.data?.canChangeRoles ?? false,
 				(member, role) => setRole.mutate({ memberId: member.id, role }),
 				setRole.isPending,
@@ -180,7 +190,7 @@ export function MembersTable() {
 			facets={facets}
 			getRowId={(row) => row.id}
 			loading={members.isFetching}
-			empty="Nobody matches this view."
+			empty={t("settings.memberEmpty")}
 		/>
 	);
 }

@@ -2,6 +2,8 @@ import Logo from "@crm/ui/components/logo";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AuthShader } from "@/components/auth-shader";
+import { LanguageMenu } from "@/components/language-menu";
+import { TranslatedText } from "@/components/translated-text";
 
 export function AuthShell({ children }: { children: ReactNode }) {
 	return (
@@ -21,7 +23,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 							CRM
 						</p>
 						<h1 className="max-w-[14ch] text-5xl/14 font-semibold text-balance">
-							Every customer, one place.
+							<TranslatedText k="signin.hero" />
 						</h1>
 					</div>
 				</div>
@@ -40,8 +42,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
 			</section>
 
 			<section className="flex min-h-svh flex-col bg-background px-6 py-8 sm:px-10 lg:px-14">
-				<div className="flex gap-2 text-sm/5 max-lg:hidden lg:invisible">
-					<Logo className="size-5 shrink-0" />
+				<div className="flex justify-end">
+					<LanguageMenu />
 				</div>
 
 				<div className="flex flex-1 items-center justify-center py-12">
@@ -56,7 +58,7 @@ export function AuthHeading({
 	title,
 	description,
 }: {
-	title: string;
+	title: ReactNode;
 	description: ReactNode;
 }) {
 	return (

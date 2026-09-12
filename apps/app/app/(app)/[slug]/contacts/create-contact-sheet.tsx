@@ -28,12 +28,14 @@ import { parseAsBoolean, useQueryState } from "nuqs";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import { useOpenRecord } from "@/components/crm/record-sheet/record-stack";
+import { useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 
 const NONE = "none";
 
 export function CreateContactSheet({ companyId }: { companyId?: string }) {
+	const { t } = useLanguage();
 	const openRecord = useOpenRecord();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
@@ -62,7 +64,11 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 			onSuccess: async (contact) => {
 				await cache.contact(contact.id);
 				toast.success(
-					`${[contact.firstName, contact.lastName].filter(Boolean).join(" ")} added.`,
+					t("common.added", {
+						name: [contact.firstName, contact.lastName]
+							.filter(Boolean)
+							.join(" "),
+					}),
 				);
 				await setOpen(null);
 				setFirstName("");
@@ -80,16 +86,13 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 			<SheetTrigger asChild>
 				<Button>
 					<Icon icon={Add} data-icon="inline-start" />
-					New contact
+					{t("contact.new")}
 				</Button>
 			</SheetTrigger>
-			<SheetContent side="right">
+			<SheetContent side="right" closeLabel={t("common.close")}>
 				<SheetHeader>
-					<SheetTitle>New contact</SheetTitle>
-					<SheetDescription>
-						Email addresses are unique, so importing the same person twice
-						updates them rather than duplicating them.
-					</SheetDescription>
+					<SheetTitle>{t("contact.new")}</SheetTitle>
+					<SheetDescription>{t("contact.description")}</SheetDescription>
 				</SheetHeader>
 
 				<form
@@ -109,7 +112,9 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 				>
 					<FieldGroup>
 						<Field>
-							<FieldLabel htmlFor={firstNameId}>First name</FieldLabel>
+							<FieldLabel htmlFor={firstNameId}>
+								{t("contact.firstName")}
+							</FieldLabel>
 							<Input
 								id={firstNameId}
 								value={firstName}
@@ -120,7 +125,9 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={lastNameId}>Last name</FieldLabel>
+							<FieldLabel htmlFor={lastNameId}>
+								{t("contact.lastName")}
+							</FieldLabel>
 							<Input
 								id={lastNameId}
 								value={lastName}
@@ -130,7 +137,7 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={emailId}>Email</FieldLabel>
+							<FieldLabel htmlFor={emailId}>{t("contact.email")}</FieldLabel>
 							<Input
 								id={emailId}
 								type="email"
@@ -141,7 +148,9 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={titleId}>Title</FieldLabel>
+							<FieldLabel htmlFor={titleId}>
+								{t("contact.titleField")}
+							</FieldLabel>
 							<Input
 								id={titleId}
 								value={title}
@@ -152,13 +161,15 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor="create-contact-company">Company</FieldLabel>
+							<FieldLabel htmlFor="create-contact-company">
+								{t("contact.company")}
+							</FieldLabel>
 							<Select value={company} onValueChange={setCompany}>
 								<SelectTrigger id="create-contact-company">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value={NONE}>No company</SelectItem>
+									<SelectItem value={NONE}>{t("common.noCompany")}</SelectItem>
 									{(companies.data ?? []).map((option) => (
 										<SelectItem key={option.id} value={option.id}>
 											{option.name}
@@ -169,13 +180,15 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor="create-contact-owner">Owner</FieldLabel>
+							<FieldLabel htmlFor="create-contact-owner">
+								{t("contact.owner")}
+							</FieldLabel>
 							<Select value={ownerId} onValueChange={setOwnerId}>
 								<SelectTrigger id="create-contact-owner">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value={NONE}>Unassigned</SelectItem>
+									<SelectItem value={NONE}>{t("common.unassigned")}</SelectItem>
 									{(users.data ?? []).map((user) => (
 										<SelectItem key={user.id} value={user.id}>
 											{user.name}
@@ -194,10 +207,10 @@ export function CreateContactSheet({ companyId }: { companyId?: string }) {
 						disabled={create.isPending || firstName.trim() === ""}
 					>
 						{create.isPending ? <Spinner /> : null}
-						Add contact
+						{t("contact.add")}
 					</Button>
 					<SheetClose asChild>
-						<Button variant="outline">Cancel</Button>
+						<Button variant="outline">{t("common.cancel")}</Button>
 					</SheetClose>
 				</SheetFooter>
 			</SheetContent>

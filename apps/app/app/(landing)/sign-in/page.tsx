@@ -1,14 +1,18 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthHeading, AuthShell } from "@/components/auth-shell";
+import { TranslatedText } from "@/components/translated-text";
+import { getRequestTranslation } from "@/lib/i18n-server";
 import { getSession } from "@/lib/session";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
+import { EmailSignIn } from "./email-sign-in";
 import { GoogleSignIn } from "./google-sign-in";
+import { LocalSignIn } from "./local-sign-in";
 import { type SsoProvider, SsoSignIn } from "./sso-sign-in";
 
-export const metadata: Metadata = {
-	title: "Sign in",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return { title: await getRequestTranslation("signin.submit") };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -49,19 +53,20 @@ export default async function SignInPage({
 	const insistOnGoogle = method === "google" && google;
 	const showSso = providers.length > 0 && !insistOnGoogle;
 	const showGoogle = google && (providers.length === 0 || insistOnGoogle);
+	const showEmail = !showSso && !showGoogle;
+	const showLocal =
+		process.env.NODE_ENV !== "production" && !showSso && !showGoogle;
 
-	if (!showSso && !showGoogle) {
+	if (!showSso && !showGoogle && !showEmail && !showLocal) {
 		return (
 			<AuthShell>
 				<AuthHeading
-					title="No way in yet"
-					description="This CRM has no sign-in method configured, so nobody can get in — including you."
+					title={<TranslatedText k="signin.noMethod" />}
+					description={<TranslatedText k="signin.noMethodDescription" />}
 				/>
 
 				<p className="text-center text-muted-foreground text-sm/5">
-					Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the root .env file
-					and restart. Your own identity provider can be added from Settings
-					once somebody is signed in.
+					<TranslatedText k="signin.noMethodInstructions" />
 				</p>
 			</AuthShell>
 		);
@@ -70,12 +75,14 @@ export default async function SignInPage({
 	return (
 		<AuthShell>
 			<AuthHeading
-				title="Welcome back"
-				description="Sign in with your account to continue."
+				title={<TranslatedText k="signin.welcome" />}
+				description={<TranslatedText k="signin.subtitle" />}
 			/>
 
 			{showSso ? <SsoSignIn providers={providers} /> : null}
 			{showGoogle ? <GoogleSignIn /> : null}
+			{showEmail ? <EmailSignIn /> : null}
+			{showLocal ? <LocalSignIn /> : null}
 		</AuthShell>
 	);
 }

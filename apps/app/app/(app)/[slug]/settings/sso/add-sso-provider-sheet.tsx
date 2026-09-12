@@ -30,6 +30,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { parseAsBoolean, useQueryState } from "nuqs";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import { CopyValue } from "./copy-value";
@@ -45,6 +46,7 @@ const EMPTY = {
 };
 
 export function AddSsoProviderSheet() {
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -67,7 +69,7 @@ export function AddSsoProviderSheet() {
 		trpc.sso.register.mutationOptions({
 			onSuccess: async (provider) => {
 				await cache.sso();
-				toast.success(`${provider.name} saved.`);
+				toast.success(t("common.saved", { name: provider.name }));
 				await setOpen(null);
 				setValues(EMPTY);
 			},
@@ -91,16 +93,14 @@ export function AddSsoProviderSheet() {
 			<SheetTrigger asChild>
 				<Button disabled={!settings.data?.canConfigure}>
 					<Icon icon={Add} data-icon="inline-start" />
-					Add provider
+					{t("sso.addProvider")}
 				</Button>
 			</SheetTrigger>
 
-			<SheetContent side="right">
+			<SheetContent side="right" closeLabel={t("common.close")}>
 				<SheetHeader>
-					<SheetTitle>Add an identity provider</SheetTitle>
-					<SheetDescription>
-						Configure an OpenID Connect provider.
-					</SheetDescription>
+					<SheetTitle>{t("sso.addTitle")}</SheetTitle>
+					<SheetDescription>{t("sso.addDescription")}</SheetDescription>
 				</SheetHeader>
 
 				<form
@@ -119,7 +119,7 @@ export function AddSsoProviderSheet() {
 				>
 					<FieldGroup>
 						<Field>
-							<FieldLabel htmlFor={providerIdId}>Name</FieldLabel>
+							<FieldLabel htmlFor={providerIdId}>{t("common.name")}</FieldLabel>
 							<Input
 								id={providerIdId}
 								value={values.providerId}
@@ -131,13 +131,11 @@ export function AddSsoProviderSheet() {
 								spellCheck={false}
 								required
 							/>
-							<FieldDescription>
-								Names the sign-in button. Cannot be changed later.
-							</FieldDescription>
+							<FieldDescription>{t("sso.nameDescription")}</FieldDescription>
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={issuerId}>Issuer URL</FieldLabel>
+							<FieldLabel htmlFor={issuerId}>{t("sso.issuerUrl")}</FieldLabel>
 							<Input
 								id={issuerId}
 								type="url"
@@ -151,11 +149,13 @@ export function AddSsoProviderSheet() {
 								inputMode="url"
 								required
 							/>
-							<FieldDescription>Where discovery lives.</FieldDescription>
+							<FieldDescription>
+								{t("sso.discoveryDescription")}
+							</FieldDescription>
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={domainId}>Email domain</FieldLabel>
+							<FieldLabel htmlFor={domainId}>{t("sso.emailDomain")}</FieldLabel>
 							<Input
 								id={domainId}
 								value={values.domain}
@@ -167,11 +167,11 @@ export function AddSsoProviderSheet() {
 								spellCheck={false}
 								required
 							/>
-							<FieldDescription>Comma-separate several.</FieldDescription>
+							<FieldDescription>{t("sso.domainDescription")}</FieldDescription>
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={clientIdId}>Client ID</FieldLabel>
+							<FieldLabel htmlFor={clientIdId}>{t("sso.clientId")}</FieldLabel>
 							<Input
 								id={clientIdId}
 								value={values.clientId}
@@ -185,7 +185,9 @@ export function AddSsoProviderSheet() {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={clientSecretId}>Client secret</FieldLabel>
+							<FieldLabel htmlFor={clientSecretId}>
+								{t("sso.clientSecret")}
+							</FieldLabel>
 							<Input
 								id={clientSecretId}
 								type="password"
@@ -194,19 +196,21 @@ export function AddSsoProviderSheet() {
 								autoComplete="off"
 								required
 							/>
-							<FieldDescription>Never shown again.</FieldDescription>
+							<FieldDescription>{t("sso.secretDescription")}</FieldDescription>
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={redirectId}>Redirect URI</FieldLabel>
+							<FieldLabel htmlFor={redirectId}>
+								{t("sso.redirectUri")}
+							</FieldLabel>
 							<InputGroup>
 								<InputGroupInput id={redirectId} value={callbackURL} readOnly />
 								<InputGroupAddon align="inline-end">
-									<CopyValue value={callbackURL} label="Redirect URI" />
+									<CopyValue value={callbackURL} label={t("sso.redirectUri")} />
 								</InputGroupAddon>
 							</InputGroup>
 							<FieldDescription>
-								Add this at your provider before saving.
+								{t("sso.redirectDescription")}
 							</FieldDescription>
 						</Field>
 					</FieldGroup>
@@ -219,10 +223,10 @@ export function AddSsoProviderSheet() {
 						disabled={!complete || register.isPending}
 					>
 						{register.isPending ? <Spinner /> : null}
-						Add provider
+						{t("sso.addProvider")}
 					</Button>
 					<SheetClose asChild>
-						<Button variant="outline">Cancel</Button>
+						<Button variant="outline">{t("common.cancel")}</Button>
 					</SheetClose>
 				</SheetFooter>
 			</SheetContent>

@@ -9,6 +9,8 @@ import {
 	PageShellHeading,
 	PageShellTitle,
 } from "@/components/page-shell";
+import { TranslatedText } from "@/components/translated-text";
+import { getRequestTranslation } from "@/lib/i18n-server";
 import { requireSession } from "@/lib/session";
 import { HydrateClient } from "@/lib/trpc/hydrate";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
@@ -16,9 +18,9 @@ import { AddSsoProviderSheet } from "./add-sso-provider-sheet";
 import { ssoSearchParams } from "./sso-search-params";
 import { SsoTable } from "./sso-table";
 
-export const metadata: Metadata = {
-	title: "SSO",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return { title: await getRequestTranslation("settings.sso") };
+}
 
 export default async function SsoSettingsPage({
 	searchParams,
@@ -43,10 +45,11 @@ export default async function SsoSettingsPage({
 		<PageShell className="min-h-0">
 			<PageShellHeader>
 				<PageShellHeading>
-					<PageShellTitle>SSO</PageShellTitle>
+					<PageShellTitle>
+						<TranslatedText k="settings.sso" />
+					</PageShellTitle>
 					<PageShellDescription>
-						Let your people sign in through your own identity provider. While
-						one is configured, the sign-in page offers it instead of Google.
+						<TranslatedText k="settings.ssoDescription" />
 					</PageShellDescription>
 				</PageShellHeading>
 

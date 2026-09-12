@@ -1,13 +1,14 @@
 "use client";
 
 import { Button } from "@crm/ui/components/button";
-import { DatePicker } from "@crm/ui/components/date-picker";
 import { Field, FieldLabel } from "@crm/ui/components/field";
 import { Input } from "@crm/ui/components/input";
 import { Spinner } from "@crm/ui/components/spinner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { LocalizedDatePicker as DatePicker } from "@/components/localized-date-picker";
+import { useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 
@@ -26,6 +27,7 @@ function QuickAddForm({
 	onCancel: () => void;
 	children: React.ReactNode;
 }) {
+	const { t } = useLanguage();
 	return (
 		<form
 			className="flex shrink-0 flex-col gap-4 border-b px-5 py-4"
@@ -43,7 +45,7 @@ function QuickAddForm({
 					disabled={pending}
 					onClick={onCancel}
 				>
-					Cancel
+					{t("common.cancel")}
 				</Button>
 				<Button type="submit" size="sm" disabled={pending || !ready}>
 					{pending ? <Spinner /> : null}
@@ -63,6 +65,7 @@ export function QuickAddContact({
 	ownerId: string | null;
 	onDone: () => void;
 }) {
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -80,7 +83,7 @@ export function QuickAddContact({
 		trpc.contacts.create.mutationOptions({
 			onSuccess: async (contact) => {
 				await cache.contact(contact.id);
-				toast.success(`${contact.firstName} added.`);
+				toast.success(t("common.added", { name: contact.firstName }));
 				onDone();
 			},
 			onError: (error) => toast.error(error.message),
@@ -89,7 +92,7 @@ export function QuickAddContact({
 
 	return (
 		<QuickAddForm
-			submitLabel="Add contact"
+			submitLabel={t("contact.add")}
 			pending={create.isPending}
 			ready={firstName.trim() !== ""}
 			onCancel={onDone}
@@ -105,7 +108,7 @@ export function QuickAddContact({
 			}
 		>
 			<Field>
-				<FieldLabel htmlFor={firstNameId}>First name</FieldLabel>
+				<FieldLabel htmlFor={firstNameId}>{t("contact.firstName")}</FieldLabel>
 				<Input
 					id={firstNameId}
 					autoFocus
@@ -115,7 +118,7 @@ export function QuickAddContact({
 				/>
 			</Field>
 			<Field>
-				<FieldLabel htmlFor={lastNameId}>Last name</FieldLabel>
+				<FieldLabel htmlFor={lastNameId}>{t("contact.lastName")}</FieldLabel>
 				<Input
 					id={lastNameId}
 					value={lastName}
@@ -124,7 +127,7 @@ export function QuickAddContact({
 				/>
 			</Field>
 			<Field>
-				<FieldLabel htmlFor={emailId}>Email</FieldLabel>
+				<FieldLabel htmlFor={emailId}>{t("contact.email")}</FieldLabel>
 				<Input
 					id={emailId}
 					type="email"
@@ -134,7 +137,7 @@ export function QuickAddContact({
 				/>
 			</Field>
 			<Field>
-				<FieldLabel htmlFor={titleId}>Title</FieldLabel>
+				<FieldLabel htmlFor={titleId}>{t("contact.titleField")}</FieldLabel>
 				<Input
 					id={titleId}
 					value={title}
@@ -158,16 +161,17 @@ export function QuickAddDeal({
 	ownerId: string | null;
 	onDone: () => void;
 }) {
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
 	const [name, setName] = useState("");
 	const [amount, setAmount] = useState("");
-	const [closeDate, setCloseDate] = useState("");
+	const [expectedOrderDate, setExpectedOrderDate] = useState("");
 
 	const nameId = useId();
 	const amountId = useId();
-	const closeId = useId();
+	const expectedOrderDateId = useId();
 
 	const me = useQuery(trpc.users.me.queryOptions());
 	const owner = ownerId ?? me.data?.id ?? null;
@@ -176,7 +180,7 @@ export function QuickAddDeal({
 		trpc.deals.create.mutationOptions({
 			onSuccess: async (deal) => {
 				await cache.deal(deal.id);
-				toast.success(`${deal.name} created.`);
+				toast.success(t("common.created", { name: deal.name }));
 				onDone();
 			},
 			onError: (error) => toast.error(error.message),
@@ -185,7 +189,7 @@ export function QuickAddDeal({
 
 	const submit = () => {
 		if (!owner) {
-			toast.error("Could not work out who should own this deal.");
+			toast.error(t("deal.ownerUnknown"));
 			return;
 		}
 
@@ -193,7 +197,7 @@ export function QuickAddDeal({
 		if (amount.trim() !== "") {
 			const parsed = Number.parseFloat(amount);
 			if (!Number.isFinite(parsed) || parsed < 0) {
-				toast.error("Amount has to be a number.");
+				toast.error(t("deal.invalidAmount"));
 				return;
 			}
 			amountCents = Math.round(parsed * 100);
@@ -204,31 +208,31 @@ export function QuickAddDeal({
 			companyId,
 			ownerId: owner,
 			amountCents,
-			expectedCloseDate: closeDate || null,
+			expectedOrderDate: expectedOrderDate || null,
 		});
 	};
 
 	return (
 		<QuickAddForm
-			submitLabel="Create deal"
+			submitLabel={t("deal.create")}
 			pending={create.isPending}
 			ready={name.trim() !== ""}
 			onCancel={onDone}
 			onSubmit={submit}
 		>
 			<Field className="sm:col-span-2">
-				<FieldLabel htmlFor={nameId}>Name</FieldLabel>
+				<FieldLabel htmlFor={nameId}>{t("deal.inquiryName")}</FieldLabel>
 				<Input
 					id={nameId}
 					autoFocus
 					value={name}
 					onChange={(event) => setName(event.target.value)}
-					placeholder={`${companyName} — Comp AI`}
+					placeholder={t("deal.namePlaceholder", { company: companyName })}
 					autoComplete="off"
 				/>
 			</Field>
 			<Field>
-				<FieldLabel htmlFor={amountId}>Amount</FieldLabel>
+				<FieldLabel htmlFor={amountId}>{t("deal.amount")}</FieldLabel>
 				<Input
 					id={amountId}
 					value={amount}
@@ -238,12 +242,14 @@ export function QuickAddDeal({
 				/>
 			</Field>
 			<Field>
-				<FieldLabel htmlFor={closeId}>Expected close</FieldLabel>
+				<FieldLabel htmlFor={expectedOrderDateId}>
+					{t("deal.expectedOrder")}
+				</FieldLabel>
 				<DatePicker
-					id={closeId}
-					value={closeDate}
-					onChange={setCloseDate}
-					placeholder="No date yet"
+					id={expectedOrderDateId}
+					value={expectedOrderDate}
+					onChange={setExpectedOrderDate}
+					placeholder={t("deal.noDate")}
 				/>
 			</Field>
 		</QuickAddForm>

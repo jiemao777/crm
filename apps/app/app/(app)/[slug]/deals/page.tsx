@@ -9,6 +9,11 @@ import {
 	PageShellHeading,
 	PageShellTitle,
 } from "@/components/page-shell";
+import {
+	TranslatedDescription,
+	TranslatedTitle,
+} from "@/components/translated-text";
+import { getRequestTranslation } from "@/lib/i18n-server";
 import { requireSession } from "@/lib/session";
 import { HydrateClient } from "@/lib/trpc/hydrate";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
@@ -16,9 +21,9 @@ import { CreateDealSheet } from "./create-deal-sheet";
 import { dealsSearchParams } from "./deals-search-params";
 import { DealsTable } from "./deals-table";
 
-export const metadata: Metadata = {
-	title: "Deals",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return { title: await getRequestTranslation("deal.title") };
+}
 
 export default async function DealsPage({
 	searchParams,
@@ -43,9 +48,11 @@ export default async function DealsPage({
 		<PageShell className="min-h-0">
 			<PageShellHeader>
 				<PageShellHeading>
-					<PageShellTitle>Deals</PageShellTitle>
+					<PageShellTitle>
+						<TranslatedTitle k="deal.title" />
+					</PageShellTitle>
 					<PageShellDescription>
-						The pipeline, and everything that has already closed.
+						<TranslatedDescription k="deal.subtitle" />
 					</PageShellDescription>
 				</PageShellHeading>
 				<PageShellActions>

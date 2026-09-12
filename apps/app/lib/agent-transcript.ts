@@ -40,6 +40,8 @@ const VERBS: Record<string, string> = {
 	schedule_recheck: "Decided when to look again",
 	record_job_change: "Raised a job change",
 	list_outstanding_work: "Looked for outstanding work",
+	create_company: "Created a customer",
+	file_mail_thread: "Filed an email thread",
 
 	load_skill: "Read its instructions for this",
 	web_search: "Searched the web",

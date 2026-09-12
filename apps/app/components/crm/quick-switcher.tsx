@@ -19,17 +19,19 @@ import { useQuery } from "@tanstack/react-query";
 import { parseAsBoolean, useQueryState } from "nuqs";
 import { useState } from "react";
 import { useOpenRecord } from "@/components/crm/record-sheet/record-stack";
+import { type TranslationKey, useLanguage } from "@/lib/i18n";
 import { useTRPC } from "@/lib/trpc/client";
 
 const GROUP_LABEL = {
-	company: "Companies",
-	contact: "Contacts",
-	deal: "Deals",
-} as const;
+	company: "company.title",
+	contact: "contact.title",
+	deal: "deal.title",
+} as const satisfies Record<string, TranslationKey>;
 
 const KINDS = ["company", "contact", "deal"] as const;
 
 export function QuickSwitcher() {
+	const { t } = useLanguage();
 	const openRecord = useOpenRecord();
 	const trpc = useTRPC();
 
@@ -66,20 +68,20 @@ export function QuickSwitcher() {
 		<CommandDialog
 			open={open}
 			onOpenChange={(next) => setOpen(next || null)}
-			title="Search"
-			description="Jump to a company, contact or deal"
+			title={t("search.title")}
+			description={t("search.description")}
 		>
 			<Command shouldFilter={false}>
 				<CommandInput
-					placeholder="Search companies, contacts and deals…"
+					placeholder={t("search.placeholder")}
 					value={query}
 					onValueChange={setQuery}
 				/>
 				<CommandList>
 					<CommandEmpty>
 						{query.trim().length < 2
-							? "Type at least two characters."
-							: "Nothing matches."}
+							? t("search.minimum")
+							: t("search.noMatch")}
 					</CommandEmpty>
 
 					{KINDS.map((kind) => {
@@ -87,7 +89,7 @@ export function QuickSwitcher() {
 						if (group.length === 0) return null;
 
 						return (
-							<CommandGroup key={kind} heading={GROUP_LABEL[kind]}>
+							<CommandGroup key={kind} heading={t(GROUP_LABEL[kind])}>
 								{group.map((hit) => (
 									<CommandItem
 										key={`${hit.kind}:${hit.id}`}

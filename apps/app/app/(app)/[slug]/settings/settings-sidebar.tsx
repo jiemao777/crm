@@ -5,20 +5,21 @@ import { cn } from "@crm/ui/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
+import { type TranslationKey, useLanguage } from "@/lib/i18n";
 import { useWorkspaceUrl } from "@/lib/use-workspace-url";
 
 type SettingsNavItem = {
-	title: string;
+	title: TranslationKey;
 	href: string;
 };
 
 const ROOT = "/settings";
 
 const ITEMS: SettingsNavItem[] = [
-	{ title: "General", href: ROOT },
-	{ title: "Members", href: `${ROOT}/members` },
-	{ title: "SSO", href: `${ROOT}/sso` },
-	{ title: "Connections", href: `${ROOT}/connections` },
+	{ title: "settings.general", href: ROOT },
+	{ title: "settings.members", href: `${ROOT}/members` },
+	{ title: "settings.sso", href: `${ROOT}/sso` },
+	{ title: "settings.connections", href: `${ROOT}/connections` },
 ];
 
 function isActive(href: string, root: string, pathname: string): boolean {
@@ -34,6 +35,7 @@ function NavLink({
 	active: boolean;
 	className: string;
 }) {
+	const { t } = useLanguage();
 	return (
 		<Button
 			asChild
@@ -50,13 +52,14 @@ function NavLink({
 				aria-current={active ? "page" : undefined}
 				transitionTypes={["nav-lateral"]}
 			>
-				{item.title}
+				{t(item.title)}
 			</Link>
 		</Button>
 	);
 }
 
 export function SettingsSidebar() {
+	const { t } = useLanguage();
 	const pathname = usePathname();
 	const workspaceUrl = useWorkspaceUrl();
 
@@ -70,7 +73,7 @@ export function SettingsSidebar() {
 		<>
 			<aside className="hidden w-56 shrink-0 border-r md:block [view-transition-name:settings-sidebar]">
 				<nav
-					aria-label="Workspace settings"
+					aria-label={t("settings.workspaceSettings")}
 					className="flex flex-col gap-0.5 p-3"
 				>
 					{items.map((item) => (
@@ -85,7 +88,7 @@ export function SettingsSidebar() {
 			</aside>
 
 			<nav
-				aria-label="Workspace settings"
+				aria-label={t("settings.workspaceSettings")}
 				className="flex gap-1 overflow-x-auto border-b p-2 md:hidden [view-transition-name:settings-sidebar]"
 			>
 				{items.map((item) => (

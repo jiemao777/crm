@@ -145,6 +145,11 @@ describe("the panel", () => {
 			new URL("../components/crm/agent-panel.tsx", import.meta.url),
 			"utf8",
 		);
+	const threadSource = () =>
+		readFileSync(
+			new URL("../components/crm/agent-thread.tsx", import.meta.url),
+			"utf8",
+		);
 
 	it("takes its copy from the record, never from a literal", () => {
 		for (const kind of ["contact", "company", "deal"] as const) {
@@ -156,8 +161,8 @@ describe("the panel", () => {
 	});
 
 	it("offers a way out of a thread that has ended", () => {
-		expect(source()).toContain("Start a new conversation");
-		expect(source()).toContain("onClick={onNewThread}");
+		expect(threadSource()).toContain('t("chat.startNew")');
+		expect(threadSource()).toContain("onClick={onNewThread}");
 	});
 });
 

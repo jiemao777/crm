@@ -9,16 +9,22 @@ import {
 	PageShellHeading,
 	PageShellTitle,
 } from "@/components/page-shell";
+import {
+	TranslatedDescription,
+	TranslatedTitle,
+} from "@/components/translated-text";
+import { getRequestTranslation } from "@/lib/i18n-server";
 import { requireSession } from "@/lib/session";
 import { HydrateClient } from "@/lib/trpc/hydrate";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
 import { companiesSearchParams } from "./companies-search-params";
 import { CompaniesTable } from "./companies-table";
 import { CreateCompanySheet } from "./create-company-sheet";
+import { DuplicatesDialog } from "./duplicates-dialog";
 
-export const metadata: Metadata = {
-	title: "Companies",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return { title: await getRequestTranslation("company.title") };
+}
 
 export default async function CompaniesPage({
 	searchParams,
@@ -40,12 +46,15 @@ export default async function CompaniesPage({
 		<PageShell className="min-h-0">
 			<PageShellHeader>
 				<PageShellHeading>
-					<PageShellTitle>Companies</PageShellTitle>
+					<PageShellTitle>
+						<TranslatedTitle k="company.title" />
+					</PageShellTitle>
 					<PageShellDescription>
-						Every account in the pipeline.
+						<TranslatedDescription k="company.subtitle" />
 					</PageShellDescription>
 				</PageShellHeading>
 				<PageShellActions>
+					<DuplicatesDialog />
 					<CreateCompanySheet />
 				</PageShellActions>
 			</PageShellHeader>

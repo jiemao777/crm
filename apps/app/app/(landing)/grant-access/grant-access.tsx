@@ -7,8 +7,10 @@ import { Button } from "@crm/ui/components/button";
 import { Spinner } from "@crm/ui/components/spinner";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 
 export function GrantAccess() {
+	const { t } = useLanguage();
 	const [pending, setPending] = useState(false);
 
 	async function handleGrant() {
@@ -24,7 +26,7 @@ export function GrantAccess() {
 		});
 
 		if (error) {
-			toast.error(error.message ?? "Could not reach Google.");
+			toast.error(error.message ?? t("google.unreachable"));
 			setPending(false);
 		}
 	}
@@ -33,7 +35,7 @@ export function GrantAccess() {
 		const { error } = await signOut();
 
 		if (error) {
-			toast.error(error.message ?? "Could not sign out.");
+			toast.error(error.message ?? t("header.signOutFailed"));
 			return;
 		}
 
@@ -53,18 +55,18 @@ export function GrantAccess() {
 				) : (
 					<GoogleLogo data-icon="inline-start" className="size-4" />
 				)}
-				Grant access
+				{t("grant.access")}
 			</Button>
 
 			<Button
 				className="w-full"
 				onClick={() => {
-					handleSignOut().catch(() => toast.error("Could not sign out."));
+					handleSignOut().catch(() => toast.error(t("header.signOutFailed")));
 				}}
 				type="button"
 				variant="ghost"
 			>
-				Sign out
+				{t("header.signOut")}
 			</Button>
 		</div>
 	);

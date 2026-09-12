@@ -1,13 +1,7 @@
 "use client";
 
-import {
-	DataTable,
-	type DataTableColumn,
-	type DataTableFacet,
-} from "@crm/ui/components/data-table";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
 import { PersonAvatar } from "@crm/ui/components/person-avatar";
-import { relativeTimeFromIso } from "@crm/ui/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { CompanyCell } from "@/components/crm/company-cell";
 import { contactName } from "@/components/crm/contact-name";
@@ -15,17 +9,27 @@ import { OwnerCell } from "@/components/crm/owner-cell";
 import { usePrefetchRecord } from "@/components/crm/record-sheet/record-prefetch";
 import { useOpenRecord } from "@/components/crm/record-sheet/record-stack";
 import { ListSearch } from "@/components/data-table/list-search";
+import {
+	LocalizedDataTable as DataTable,
+	type DataTableColumn,
+	type DataTableFacet,
+} from "@/components/data-table/localized-data-table";
 import { useTableQuery } from "@/components/data-table/use-table-query";
+import { type TranslationKey, useLanguage } from "@/lib/i18n";
+import { formatRelativeTime, type Language } from "@/lib/i18n-core";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
 import { contactsSearchParams } from "./contacts-search-params";
 
 type ContactRow = RouterOutputs["contacts"]["list"]["rows"][number];
 
-const COLUMNS: DataTableColumn<ContactRow>[] = [
+const makeColumns = (
+	t: (key: TranslationKey) => string,
+	language: Language,
+): DataTableColumn<ContactRow>[] => [
 	{
 		id: "name",
-		header: "Name",
+		header: t("contact.name"),
 		sortable: true,
 		hideable: false,
 		width: "w-[22%]",
@@ -43,7 +47,7 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 	},
 	{
 		id: "title",
-		header: "Title",
+		header: t("contact.titleField"),
 		sortable: true,
 		width: "w-[20%]",
 		hideBelow: "lg",
@@ -56,7 +60,7 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 	},
 	{
 		id: "email",
-		header: "Email",
+		header: t("contact.email"),
 		sortable: true,
 		width: "w-[24%]",
 		hideBelow: "md",
@@ -69,14 +73,14 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 	},
 	{
 		id: "company",
-		header: "Company",
+		header: t("contact.company"),
 		sortable: true,
 		width: "w-[18%]",
 		cell: (row) => <CompanyCell company={row.company} />,
 	},
 	{
 		id: "owner",
-		header: "Owner",
+		header: t("contact.owner"),
 		sortable: true,
 		width: "w-[16%]",
 		hideBelow: "md",
@@ -84,34 +88,35 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 	},
 	{
 		id: "createdAt",
-		header: "Created",
-		label: "Created date",
+		header: t("contact.created"),
+		label: t("contact.createdDate"),
 		sortable: true,
 		align: "right",
 		width: "w-[10%]",
 		defaultHidden: true,
 		cell: (row) => (
 			<span className="text-muted-foreground" suppressHydrationWarning>
-				{relativeTimeFromIso(row.createdAt)}
+				{formatRelativeTime(row.createdAt, language)}
 			</span>
 		),
 	},
 	{
 		id: "lastActivity",
-		header: "Last activity",
+		header: t("contact.lastActivity"),
 		sortable: true,
 		align: "right",
 		width: "w-[12%]",
 		hideBelow: "sm",
 		cell: (row) => (
 			<span className="text-muted-foreground" suppressHydrationWarning>
-				{relativeTimeFromIso(row.lastActivityAt)}
+				{formatRelativeTime(row.lastActivityAt, language)}
 			</span>
 		),
 	},
 ];
 
 export function ContactsTable() {
+	const { language, t } = useLanguage();
 	const openRecord = useOpenRecord();
 	const trpc = useTRPC();
 	const prefetchRecord = usePrefetchRecord();
@@ -129,9 +134,9 @@ export function ContactsTable() {
 	const facets: DataTableFacet[] = [
 		{
 			id: "owner",
-			label: "Owner",
+			label: t("contact.owner"),
 			options: [
-				{ value: "unassigned", label: "Unassigned" },
+				{ value: "unassigned", label: t("common.unassigned") },
 				...(users.data ?? []).map((user) => ({
 					value: user.id,
 					label: user.name,
@@ -140,9 +145,9 @@ export function ContactsTable() {
 		},
 		{
 			id: "company",
-			label: "Company",
+			label: t("contact.company"),
 			options: [
-				{ value: "none", label: "No company" },
+				{ value: "none", label: t("common.noCompany") },
 				...(companies.data ?? []).map((company) => ({
 					value: company.id,
 					label: company.name,
@@ -154,8 +159,8 @@ export function ContactsTable() {
 	return (
 		<DataTable
 			query={query}
-			search={<ListSearch placeholder="Search by name, email or company…" />}
-			columns={COLUMNS}
+			search={<ListSearch placeholder={t("contact.search")} />}
+			columns={makeColumns(t, language)}
 			rows={contacts.data?.rows ?? []}
 			total={contacts.data?.total ?? 0}
 			facetCounts={facetCounts}
@@ -164,7 +169,7 @@ export function ContactsTable() {
 			loading={contacts.isFetching}
 			onRowHover={(row) => prefetchRecord({ kind: "contact", id: row.id })}
 			onRowClick={(row) => openRecord({ kind: "contact", id: row.id })}
-			empty="No contacts match this view."
+			empty={t("contact.empty")}
 		/>
 	);
 }

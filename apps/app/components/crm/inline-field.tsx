@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@crm/ui/components/button";
-import { DatePicker } from "@crm/ui/components/date-picker";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
 import { Input } from "@crm/ui/components/input";
 import {
@@ -16,6 +15,7 @@ import { Spinner } from "@crm/ui/components/spinner";
 import { cn } from "@crm/ui/lib/utils";
 import { useId, useState } from "react";
 import { PROPERTY_LABEL, PROPERTY_ROW } from "@/components/detail-sheet";
+import { LocalizedDatePicker as DatePicker } from "@/components/localized-date-picker";
 
 const ROW = cn(PROPERTY_ROW, "items-center");
 const LABEL = PROPERTY_LABEL;

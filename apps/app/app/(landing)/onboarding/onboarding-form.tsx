@@ -19,9 +19,11 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useId } from "react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 import { useTRPC } from "@/lib/trpc/client";
 
 export function OnboardingForm({ placeholder }: { placeholder: string }) {
+	const { t } = useLanguage();
 	const trpc = useTRPC();
 	const router = useRouter();
 
@@ -54,7 +56,9 @@ export function OnboardingForm({ placeholder }: { placeholder: string }) {
 		>
 			<FieldGroup>
 				<Field>
-					<FieldLabel htmlFor={nameId}>Company name</FieldLabel>
+					<FieldLabel htmlFor={nameId}>
+						{t("onboarding.companyName")}
+					</FieldLabel>
 					<Input
 						id={nameId}
 						name="name"
@@ -66,7 +70,7 @@ export function OnboardingForm({ placeholder }: { placeholder: string }) {
 				</Field>
 
 				<Field>
-					<FieldLabel htmlFor={websiteId}>Website</FieldLabel>
+					<FieldLabel htmlFor={websiteId}>{t("settings.website")}</FieldLabel>
 					<InputGroup>
 						<InputGroupAddon>
 							<InputGroupText>https://</InputGroupText>
@@ -84,14 +88,14 @@ export function OnboardingForm({ placeholder }: { placeholder: string }) {
 						/>
 					</InputGroup>
 					<FieldDescription>
-						Read once, so every answer afterwards knows what you sell.
+						{t("onboarding.websiteDescription")}
 					</FieldDescription>
 				</Field>
 			</FieldGroup>
 
 			<Button type="submit" disabled={save.isPending}>
 				{save.isPending ? <Spinner data-icon="inline-start" /> : null}
-				Continue
+				{t("onboarding.continue")}
 			</Button>
 		</form>
 	);

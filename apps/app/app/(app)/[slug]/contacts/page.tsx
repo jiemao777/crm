@@ -9,6 +9,11 @@ import {
 	PageShellHeading,
 	PageShellTitle,
 } from "@/components/page-shell";
+import {
+	TranslatedDescription,
+	TranslatedTitle,
+} from "@/components/translated-text";
+import { getRequestTranslation } from "@/lib/i18n-server";
 import { requireSession } from "@/lib/session";
 import { HydrateClient } from "@/lib/trpc/hydrate";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
@@ -16,9 +21,9 @@ import { contactsSearchParams } from "./contacts-search-params";
 import { ContactsTable } from "./contacts-table";
 import { CreateContactSheet } from "./create-contact-sheet";
 
-export const metadata: Metadata = {
-	title: "Contacts",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return { title: await getRequestTranslation("contact.title") };
+}
 
 export default async function ContactsPage({
 	searchParams,
@@ -43,8 +48,12 @@ export default async function ContactsPage({
 		<PageShell className="min-h-0">
 			<PageShellHeader>
 				<PageShellHeading>
-					<PageShellTitle>Contacts</PageShellTitle>
-					<PageShellDescription>Everyone in the pipeline.</PageShellDescription>
+					<PageShellTitle>
+						<TranslatedTitle k="contact.title" />
+					</PageShellTitle>
+					<PageShellDescription>
+						<TranslatedDescription k="contact.subtitle" />
+					</PageShellDescription>
 				</PageShellHeading>
 				<PageShellActions>
 					<CreateContactSheet />

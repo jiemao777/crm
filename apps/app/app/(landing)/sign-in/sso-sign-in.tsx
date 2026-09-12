@@ -5,6 +5,7 @@ import { Button } from "@crm/ui/components/button";
 import { Spinner } from "@crm/ui/components/spinner";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 
 export type SsoProvider = {
 	providerId: string;
@@ -12,6 +13,7 @@ export type SsoProvider = {
 };
 
 export function SsoSignIn({ providers }: { providers: SsoProvider[] }) {
+	const { t } = useLanguage();
 	const [pending, setPending] = useState<string | null>(null);
 
 	async function handleClick(providerId: string) {
@@ -26,7 +28,7 @@ export function SsoSignIn({ providers }: { providers: SsoProvider[] }) {
 		});
 
 		if (error) {
-			toast.error(error.message ?? "Could not reach the sign-in service.");
+			toast.error(error.message ?? t("signin.serviceFailed"));
 			setPending(null);
 		}
 	}
@@ -45,7 +47,7 @@ export function SsoSignIn({ providers }: { providers: SsoProvider[] }) {
 					{pending === provider.providerId ? (
 						<Spinner data-icon="inline-start" />
 					) : null}
-					Continue with {provider.name}
+					{t("signin.sso", { provider: provider.name })}
 				</Button>
 			))}
 		</>

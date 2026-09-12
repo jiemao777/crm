@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { AuthHeading, AuthShell } from "@/components/auth-shell";
+import { TranslatedText } from "@/components/translated-text";
+import { getRequestTranslation } from "@/lib/i18n-server";
 import { requireGoogleAccess } from "@/lib/session";
-import { ResearchForm } from "./research-form";
+import { ResearchProviderForm } from "./research-provider-form";
 
-export const metadata: Metadata = {
-	title: "Research key",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	return { title: await getRequestTranslation("onboarding.researchKey") };
+}
 
 export default async function ResearchKeyPage() {
 	await requireGoogleAccess();
@@ -13,11 +15,11 @@ export default async function ResearchKeyPage() {
 	return (
 		<AuthShell>
 			<AuthHeading
-				title="Level up your CRM data"
-				description="Power your research agent with Context to research every company added to your CRM."
+				title={<TranslatedText k="onboarding.researchTitle" />}
+				description={<TranslatedText k="onboarding.researchDescription" />}
 			/>
 
-			<ResearchForm />
+			<ResearchProviderForm />
 		</AuthShell>
 	);
 }

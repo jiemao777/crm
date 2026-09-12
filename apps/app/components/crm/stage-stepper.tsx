@@ -10,10 +10,11 @@ import {
 	isClosedStage,
 	OPEN_STAGES,
 } from "@/components/crm/deal-stage";
+import { useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 
-const RAIL = [...OPEN_STAGES, DealStage.CLOSED_WON] as readonly DealStage[];
+const RAIL = [...OPEN_STAGES, DealStage.WON] as readonly DealStage[];
 
 export function StageStepper({
 	dealId,
@@ -22,6 +23,7 @@ export function StageStepper({
 	dealId: string;
 	stage: DealStage;
 }) {
+	const { language, t } = useLanguage();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -29,13 +31,13 @@ export function StageStepper({
 		trpc.deals.setStage.mutationOptions({
 			onSuccess: async (result) => {
 				await cache.deal(dealId);
-				if (result.changed) toast.success("Stage updated.");
+				if (result.changed) toast.success(t("deal.stageUpdated"));
 			},
 			onError: (error) => toast.error(error.message),
 		}),
 	);
 
-	const exited = isClosedStage(stage) && stage !== DealStage.CLOSED_WON;
+	const exited = isClosedStage(stage) && stage !== DealStage.WON;
 	const steps = exited ? OPEN_STAGES : RAIL;
 	const currentIndex = steps.indexOf(stage);
 
@@ -60,10 +62,10 @@ export function StageStepper({
 							)}
 						>
 							<span className="block truncate">
-								{current && option === DealStage.CLOSED_WON ? (
+								{current && option === DealStage.WON ? (
 									<DealStageIndicator stage={stage} className="text-xs" />
 								) : (
-									dealStageLabel(option)
+									dealStageLabel(option, language)
 								)}
 							</span>
 						</button>

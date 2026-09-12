@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
 
 	serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
 
+	turbopack: {
+		resolveAlias: {
+			"@crm/env/load": "./lib/env-noop.ts",
+		},
+	},
+
 	images: {
 		remotePatterns: [
 			{ protocol: "https", hostname: "**.blob.vercel-storage.com" },

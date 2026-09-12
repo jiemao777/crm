@@ -44,8 +44,15 @@ const workspace = (data: {
 	slug?: string;
 }) => ({ result: { data: { slug: SLUG, ...data } } });
 
-const researchKey = (configured: boolean) => ({
-	result: { data: { configured, hint: configured ? "••••9876" : null } },
+const researchProvider = (configured: boolean) => ({
+	result: {
+		data: {
+			configured,
+			kind: configured ? "tavily" : null,
+			hint: null,
+			keyless: configured,
+		},
+	},
 });
 
 /** Answers both gate procedures, counting the calls to each. */
@@ -69,7 +76,7 @@ function setup({
 		}
 
 		calls.research += 1;
-		return json(researchKey(configured));
+		return json(researchProvider(configured));
 	});
 
 	return calls;
@@ -128,13 +135,13 @@ describe("readWorkspaceGate", () => {
 });
 
 describe("readResearchGate", () => {
-	it("is settled once a key is saved, and required until then", async () => {
-		answerWith(researchKey(true));
+	it("is settled once a provider is saved, and required until then", async () => {
+		answerWith(researchProvider(true));
 		expect(await readResearchGate(request("/", [SESSION_COOKIE]))).toBe(
 			"settled",
 		);
 
-		answerWith(researchKey(false));
+		answerWith(researchProvider(false));
 		expect(await readResearchGate(request("/", [SESSION_COOKIE]))).toBe(
 			"required",
 		);
@@ -351,8 +358,8 @@ describe("the slug the app is served under", () => {
 	});
 });
 
-describe("the research key gate", () => {
-	it("sends an onboarded rep with no key to the key form", async () => {
+describe("the research provider gate", () => {
+	it("sends an onboarded rep with no provider to the provider form", async () => {
 		setup({ configured: false });
 
 		expect(
@@ -382,7 +389,7 @@ describe("the research key gate", () => {
 		).toBe("/onboarding");
 	});
 
-	it("sends them on to the key once the workspace is named", async () => {
+	it("sends them on to research setup once the workspace is named", async () => {
 		setup({ onboarded: true, configured: false });
 
 		expect(

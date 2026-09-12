@@ -9,25 +9,22 @@ import {
 import type { ChartConfig } from "@crm/ui/components/chart";
 import { DashboardRow, StatGroup } from "@crm/ui/components/dashboard";
 import { StatCard, type StatDelta } from "@crm/ui/components/stat-card";
+import { ToggleGroup, ToggleGroupItem } from "@crm/ui/components/toggle-group";
 import {
-	formatCount,
 	formatMoney,
 	formatMoneyCompact,
 	formatPercent,
 } from "@crm/ui/lib/format";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { dealStageColor, dealStageLabel } from "@/components/crm/deal-stage";
 import { AreaTrend, DonutStat } from "@/components/dashboard-charts";
+import { useLanguage } from "@/lib/i18n";
 import type { RouterOutputs } from "@/lib/trpc/types";
 import { useWorkspaceUrl } from "@/lib/use-workspace-url";
 
 type Summary = RouterOutputs["dashboard"]["summary"];
-
-const TREND_CONFIG: ChartConfig = {
-	won: { label: "Closed won", color: "var(--success)" },
-	created: { label: "New pipeline", color: "var(--chart-1)" },
-};
+type CurrencyAmount = { currency: string; valueCents: number };
 
 function changeDelta(
 	current: number,
@@ -43,50 +40,108 @@ function changeDelta(
 	};
 }
 
+function joinedAmounts(totals: CurrencyAmount[]): string {
+	if (totals.length === 0) return formatMoneyCompact(0);
+	return totals
+		.map((entry) => formatMoneyCompact(entry.valueCents, entry.currency))
+		.join(" + ");
+}
+
+function singleAmount(
+	totals: CurrencyAmount[],
+): { currency: string; valueCents: number } | null {
+	return totals.length === 1 ? (totals[0] ?? null) : null;
+}
+
 export function SalesDashboard({ summary }: { summary: Summary }) {
+	const { language, t } = useLanguage();
 	const workspaceUrl = useWorkspaceUrl();
+	const [picked, setPicked] = useState<string | null>(null);
 
-	const {
-		pipeline,
-		wonThisMonth,
-		wonPrevMonth,
-		performance,
-		trend,
-		closingThisMonthTotal,
-	} = summary;
+	const { pipeline, wonThisMonth, wonPrevMonth, performance, trend } = summary;
 
-	const hasTrend = trend.some((point) => point.won > 0 || point.created > 0);
+	const currencies = [
+		...new Set([
+			...pipeline.totals.map((entry) => entry.currency),
+			...trend.map((entry) => entry.currency),
+		]),
+	].sort();
+	const primary =
+		[...pipeline.totals].sort((a, b) => b.count - a.count)[0]?.currency ??
+		trend[0]?.currency ??
+		null;
+	const currency =
+		picked && currencies.includes(picked) ? picked : (primary ?? "USD");
+
+	const trendConfig: ChartConfig = {
+		won: { label: t("dashboard.ordersWonLegend"), color: "var(--success)" },
+		created: {
+			label: t("dashboard.newInquiriesLegend"),
+			color: "var(--chart-1)",
+		},
+	};
+
+	const trendPoints = (
+		trend.find((entry) => entry.currency === currency)?.points ?? []
+	).map((point) => ({
+		month: point.month,
+		won: point.wonCents,
+		created: point.createdCents,
+	}));
+	const hasTrend = trendPoints.some(
+		(point) => point.won > 0 || point.created > 0,
+	);
 
 	const stageSlices = pipeline.stages
-		.map((stage) => ({
-			key: stage.stage,
-			label: dealStageLabel(stage.stage),
-			value: stage.valueCents,
-			color: dealStageColor(stage.stage),
-			count: stage.count,
-		}))
+		.map((stage) => {
+			const total = stage.totals.find((entry) => entry.currency === currency);
+			return {
+				key: stage.stage,
+				label: dealStageLabel(stage.stage, language),
+				value: total?.valueCents ?? 0,
+				color: dealStageColor(stage.stage),
+				count: total?.count ?? 0,
+			};
+		})
 		.filter((slice) => slice.value > 0);
+
+	const currencyTotalCents =
+		pipeline.totals.find((entry) => entry.currency === currency)?.valueCents ??
+		0;
+
+	const wonNow = singleAmount(wonThisMonth.totals);
+	const wonPrev = singleAmount(wonPrevMonth.totals);
+	const wonDelta =
+		wonNow && wonPrev && wonNow.currency === wonPrev.currency
+			? changeDelta(
+					wonNow.valueCents,
+					wonPrev.valueCents,
+					t("dashboard.vsLastMonth"),
+				)
+			: undefined;
 
 	return (
 		<div className="flex flex-col gap-6">
 			<StatGroup>
 				<StatCard
-					label="Closed won this month"
-					value={formatMoneyCompact(wonThisMonth.valueCents)}
-					delta={changeDelta(
-						wonThisMonth.valueCents,
-						wonPrevMonth.valueCents,
-						"vs. last month",
-					)}
-					description={`${formatCount(wonThisMonth.count, "deal")} · ${formatMoneyCompact(wonPrevMonth.valueCents)} last month`}
+					label={t("dashboard.ordersWon")}
+					value={joinedAmounts(wonThisMonth.totals)}
+					delta={wonDelta}
+					description={t("dashboard.wonDescription", {
+						count: wonThisMonth.count,
+						amount: joinedAmounts(wonPrevMonth.totals),
+					})}
 				/>
 				<StatCard
-					label="Open pipeline"
-					value={formatMoneyCompact(pipeline.totalCents)}
-					description={`${formatCount(pipeline.totalDeals, "deal")} in progress · ${formatMoneyCompact(closingThisMonthTotal.valueCents)} due this month`}
+					label={t("dashboard.activeValue")}
+					value={joinedAmounts(pipeline.totals)}
+					description={t("dashboard.activeDescription", {
+						count: pipeline.totalDeals,
+						amount: joinedAmounts(summary.closingThisMonthTotal.totals),
+					})}
 				/>
 				<StatCard
-					label={`Win rate (${performance.windowDays}d)`}
+					label={t("dashboard.winRate", { days: performance.windowDays })}
 					value={
 						performance.winRate === null
 							? "—"
@@ -94,63 +149,99 @@ export function SalesDashboard({ summary }: { summary: Summary }) {
 					}
 					description={
 						performance.wins + performance.losses === 0
-							? "Nothing has closed yet"
-							: `${performance.wins} won · ${performance.losses} lost`
+							? t("dashboard.nothingClosed")
+							: t("dashboard.wonLost", {
+									won: performance.wins,
+									lost: performance.losses,
+								})
 					}
 				/>
 				<StatCard
-					label={`Average deal (${performance.windowDays}d)`}
+					label={t("dashboard.avgInquiry", { days: performance.windowDays })}
 					value={
-						performance.avgDealCents === null
+						performance.avgDeal.length === 0
 							? "—"
-							: formatMoneyCompact(performance.avgDealCents)
+							: joinedAmounts(performance.avgDeal)
 					}
 					description={
 						performance.avgCycleDays === null
-							? "No wins to measure"
-							: `${performance.avgCycleDays}-day average cycle`
+							? t("dashboard.noWins")
+							: t("dashboard.averageCycle", {
+									days: performance.avgCycleDays,
+								})
 					}
 				/>
 			</StatGroup>
 
+			{currencies.length > 1 ? (
+				<div className="flex flex-wrap items-center justify-end gap-3">
+					<span className="text-muted-foreground text-xs">
+						{t("dashboard.multiCurrencyNote")}
+					</span>
+					<ToggleGroup
+						type="single"
+						variant="outline"
+						size="sm"
+						spacing={0}
+						value={currency}
+						onValueChange={(next) => {
+							if (next) setPicked(next);
+						}}
+						aria-label={t("dashboard.currencyLabel")}
+					>
+						{currencies.map((code) => (
+							<ToggleGroupItem key={code} value={code}>
+								{code}
+							</ToggleGroupItem>
+						))}
+					</ToggleGroup>
+				</div>
+			) : null}
+
 			<DashboardRow split="hero">
 				<ChartPanel
-					title="Closed won vs. new pipeline"
-					description="Last six months, by the month a deal closed or was created"
+					title={t("dashboard.ordersVsInquiries")}
+					description={t("dashboard.trendDescription")}
 				>
 					{hasTrend ? (
 						<div className="flex flex-1 flex-col justify-center py-4">
 							<AreaTrend
-								data={trend}
-								config={TREND_CONFIG}
+								data={trendPoints}
+								config={trendConfig}
 								xKey="month"
 								height={196}
 								variant="gradient"
 								bloom="high"
 								showLegend
 								formatValue={(value) =>
-									formatMoney(typeof value === "number" ? value : Number(value))
+									formatMoney(
+										typeof value === "number" ? value : Number(value),
+										currency,
+									)
 								}
 							/>
 						</div>
 					) : (
-						<EmptyChart label="No deals closed or created yet" />
+						<EmptyChart label={t("dashboard.noTrend")} />
 					)}
 				</ChartPanel>
 
 				<ChartPanel
-					title="Open pipeline by stage"
-					description="Where the value sits right now"
+					title={t("dashboard.activeByStage")}
+					description={t("dashboard.stageValueDescription")}
 				>
 					{stageSlices.length > 0 ? (
 						<div className="flex flex-1 flex-col justify-between gap-1 pt-4">
 							<DonutStat
 								data={stageSlices}
 								height={168}
-								centerValue={formatMoneyCompact(pipeline.totalCents)}
-								centerLabel="open"
+								centerValue={formatMoneyCompact(currencyTotalCents, currency)}
+								centerLabel={t("dashboard.open")}
 								formatValue={(value) =>
-									formatMoney(typeof value === "number" ? value : Number(value))
+									formatMoney(
+										typeof value === "number" ? value : Number(value),
+										currency,
+									)
 								}
 							/>
 							<ul className="flex flex-col px-5 pb-1 md:px-6">
@@ -172,7 +263,7 @@ export function SalesDashboard({ summary }: { summary: Summary }) {
 												{slice.count}
 											</span>
 											<span className="w-14 shrink-0 text-right font-medium tabular-nums">
-												{formatMoneyCompact(slice.value)}
+												{formatMoneyCompact(slice.value, currency)}
 											</span>
 										</Link>
 									</li>
@@ -180,7 +271,7 @@ export function SalesDashboard({ summary }: { summary: Summary }) {
 							</ul>
 						</div>
 					) : (
-						<EmptyChart label="Nothing open" />
+						<EmptyChart label={t("dashboard.nothingOpen")} />
 					)}
 				</ChartPanel>
 			</DashboardRow>

@@ -3,6 +3,7 @@
 import Building from "@carbon/icons-react/es/Building";
 import type { CarbonIconType } from "@carbon/icons-react/es/CarbonIcon";
 import Dashboard from "@carbon/icons-react/es/Dashboard";
+import MailAll from "@carbon/icons-react/es/MailAll";
 import Partnership from "@carbon/icons-react/es/Partnership";
 import Settings from "@carbon/icons-react/es/Settings";
 import UserMultiple from "@carbon/icons-react/es/UserMultiple";
@@ -24,26 +25,38 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 import { useMobileNav } from "@/components/mobile-nav";
+import { type TranslationKey, useLanguage } from "@/lib/i18n";
 import { useWorkspaceUrl } from "@/lib/use-workspace-url";
 
 type RailItem = {
-	title: string;
+	title: TranslationKey;
 	href: string;
 	icon: CarbonIconType;
 	match: "exact" | "prefix";
 };
 
 const ITEMS: RailItem[] = [
-	{ title: "Overview", href: "/", icon: Dashboard, match: "exact" },
-	{ title: "Companies", href: "/companies", icon: Building, match: "prefix" },
+	{ title: "nav.overview", href: "/", icon: Dashboard, match: "exact" },
 	{
-		title: "Contacts",
+		title: "nav.customers",
+		href: "/companies",
+		icon: Building,
+		match: "prefix",
+	},
+	{
+		title: "nav.contacts",
 		href: "/contacts",
 		icon: UserMultiple,
 		match: "prefix",
 	},
-	{ title: "Deals", href: "/deals", icon: Partnership, match: "prefix" },
-	{ title: "Settings", href: "/settings", icon: Settings, match: "prefix" },
+	{
+		title: "nav.inquiries",
+		href: "/deals",
+		icon: Partnership,
+		match: "prefix",
+	},
+	{ title: "nav.mailbox", href: "/mail", icon: MailAll, match: "prefix" },
+	{ title: "nav.settings", href: "/settings", icon: Settings, match: "prefix" },
 ];
 
 function isActive(item: RailItem, pathname: string): boolean {
@@ -54,6 +67,7 @@ function isActive(item: RailItem, pathname: string): boolean {
 }
 
 function RailLink({ item, active }: { item: RailItem; active: boolean }) {
+	const { t } = useLanguage();
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
@@ -73,11 +87,11 @@ function RailLink({ item, active }: { item: RailItem; active: boolean }) {
 						transitionTypes={["nav-lateral"]}
 					>
 						<Icon icon={item.icon} />
-						<span className="sr-only">{item.title}</span>
+						<span className="sr-only">{t(item.title)}</span>
 					</Link>
 				</Button>
 			</TooltipTrigger>
-			<TooltipContent side="right">{item.title}</TooltipContent>
+			<TooltipContent side="right">{t(item.title)}</TooltipContent>
 		</Tooltip>
 	);
 }
@@ -91,6 +105,7 @@ function MobileRailLink({
 	active: boolean;
 	onNavigate: () => void;
 }) {
+	const { t } = useLanguage();
 	return (
 		<Button
 			asChild
@@ -107,7 +122,7 @@ function MobileRailLink({
 				onClick={onNavigate}
 			>
 				<Icon icon={item.icon} />
-				<span>{item.title}</span>
+				<span>{t(item.title)}</span>
 			</Link>
 		</Button>
 	);
@@ -115,6 +130,7 @@ function MobileRailLink({
 
 export function AppIconRail() {
 	const pathname = usePathname();
+	const { t } = useLanguage();
 	const workspaceUrl = useWorkspaceUrl();
 	const { open, setOpen } = useMobileNav();
 
@@ -126,7 +142,7 @@ export function AppIconRail() {
 	return (
 		<>
 			<nav
-				aria-label="Primary"
+				aria-label={t("nav.primary")}
 				className="hidden w-14 shrink-0 flex-col items-center gap-1 border-r py-3 md:flex [view-transition-name:app-rail]"
 			>
 				{items.map((item) => (
@@ -139,11 +155,18 @@ export function AppIconRail() {
 			</nav>
 
 			<Sheet open={open} onOpenChange={setOpen}>
-				<SheetContent side="left" className="w-64 gap-0 p-0">
+				<SheetContent
+					side="left"
+					className="w-64 gap-0 p-0"
+					closeLabel={t("common.close")}
+				>
 					<SheetHeader>
-						<SheetTitle>Navigation</SheetTitle>
+						<SheetTitle>{t("nav.navigation")}</SheetTitle>
 					</SheetHeader>
-					<nav aria-label="Primary" className="flex flex-1 flex-col gap-1 p-2">
+					<nav
+						aria-label={t("nav.primary")}
+						className="flex flex-1 flex-col gap-1 p-2"
+					>
 						{items.map((item) => (
 							<MobileRailLink
 								key={item.href}

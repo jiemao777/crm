@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/app-header";
 import { AppIconRail } from "@/components/app-icon-rail";
 import { QuickSwitcher } from "@/components/crm/quick-switcher";
 import { RecordSheetHost } from "@/components/crm/record-sheet/record-sheet-host";
+import { GlobalChatButton } from "@/components/global-chat";
 import { MobileNavProvider } from "@/components/mobile-nav";
 import { requireGoogleAccess } from "@/lib/session";
 import { HydrateClient } from "@/lib/trpc/hydrate";
@@ -46,6 +47,8 @@ export default async function AppLayout({
 				<RecordSheetHost />
 
 				<QuickSwitcher />
+
+				<GlobalChatButton />
 			</div>
 		</MobileNavProvider>
 	);

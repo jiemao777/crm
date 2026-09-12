@@ -8,20 +8,26 @@ import Task from "@carbon/icons-react/es/Task";
 import type { ActivityType } from "@crm/db/enums";
 import type { CarbonIcon } from "@crm/ui/components/icon";
 import { Icon } from "@crm/ui/components/icon";
+import { type Language, type TranslationKey, translate } from "@/lib/i18n-core";
 
-const PRESENTATION: Record<ActivityType, { icon: CarbonIcon; label: string }> =
-	{
-		NOTE: { icon: Chat, label: "Note" },
-		CALL: { icon: Phone, label: "Call" },
-		EMAIL: { icon: Email, label: "Email" },
-		MEETING: { icon: Events, label: "Meeting" },
-		TASK: { icon: Task, label: "Task" },
-		STAGE_CHANGE: { icon: ArrowRight, label: "Stage change" },
-		ENRICHMENT: { icon: MagicWand, label: "Enrichment" },
-	};
+const PRESENTATION: Record<
+	ActivityType,
+	{ icon: CarbonIcon; key: TranslationKey }
+> = {
+	NOTE: { icon: Chat, key: "activity.note" },
+	CALL: { icon: Phone, key: "activity.call" },
+	EMAIL: { icon: Email, key: "activity.email" },
+	MEETING: { icon: Events, key: "activity.meeting" },
+	TASK: { icon: Task, key: "activity.task" },
+	STAGE_CHANGE: { icon: ArrowRight, key: "activity.stageChange" },
+	ENRICHMENT: { icon: MagicWand, key: "activity.enrichment" },
+};
 
-export function activityLabel(type: ActivityType): string {
-	return PRESENTATION[type].label;
+export function activityLabel(
+	type: ActivityType,
+	language: Language = "en",
+): string {
+	return translate(language, PRESENTATION[type].key);
 }
 
 export function ActivityIcon({ type }: { type: ActivityType }) {

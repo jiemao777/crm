@@ -86,8 +86,14 @@ async function handler(request: Request): Promise<Response> {
 
 	const raw = Buffer.from(await upstream.arrayBuffer());
 	const body = decode(raw, upstream.headers.get("content-encoding"));
+	const responseBody: BodyInit | null =
+		request.method === "HEAD" ||
+		upstream.status === 204 ||
+		upstream.status === 304
+			? null
+			: new Blob([new Uint8Array(body)]);
 
-	return new Response(new Uint8Array(body), {
+	return new Response(responseBody, {
 		status: upstream.status,
 		statusText: upstream.statusText,
 		headers: responseHeaders,

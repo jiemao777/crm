@@ -2,7 +2,6 @@
 
 import Add from "@carbon/icons-react/es/Add";
 import { Button } from "@crm/ui/components/button";
-import { DatePicker } from "@crm/ui/components/date-picker";
 import {
 	Field,
 	FieldDescription,
@@ -35,12 +34,15 @@ import { useId, useState } from "react";
 import { toast } from "sonner";
 import { dealStageLabel, OPEN_STAGES } from "@/components/crm/deal-stage";
 import { useOpenRecord } from "@/components/crm/record-sheet/record-stack";
+import { LocalizedDatePicker as DatePicker } from "@/components/localized-date-picker";
+import { useLanguage } from "@/lib/i18n";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 
 const UNSET = "";
 
 export function CreateDealSheet({ companyId }: { companyId?: string }) {
+	const { language, t } = useLanguage();
 	const openRecord = useOpenRecord();
 	const trpc = useTRPC();
 	const cache = useCrmCache();
@@ -52,13 +54,19 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 	const [name, setName] = useState("");
 	const [company, setCompany] = useState(companyId ?? UNSET);
 	const [ownerId, setOwnerId] = useState(UNSET);
-	const [stage, setStage] = useState<string>("DEMO_BOOKED");
+	const [stage, setStage] = useState<string>("NEW_INQUIRY");
 	const [amount, setAmount] = useState("");
-	const [closeDate, setCloseDate] = useState("");
+	const [expectedOrderDate, setExpectedOrderDate] = useState("");
+	const [productSummary, setProductSummary] = useState("");
+	const [quantity, setQuantity] = useState("");
+	const [destinationPort, setDestinationPort] = useState("");
 
 	const nameId = useId();
 	const amountId = useId();
-	const closeDateId = useId();
+	const expectedOrderDateId = useId();
+	const productId = useId();
+	const quantityId = useId();
+	const destinationId = useId();
 
 	const users = useQuery(trpc.users.list.queryOptions());
 	const companies = useQuery(trpc.companies.options.queryOptions({ q: "" }));
@@ -70,11 +78,14 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 		trpc.deals.create.mutationOptions({
 			onSuccess: async (deal) => {
 				await cache.deal(deal.id);
-				toast.success(`${deal.name} added.`);
+				toast.success(t("common.added", { name: deal.name }));
 				await setOpen(null);
 				setName("");
 				setAmount("");
-				setCloseDate("");
+				setExpectedOrderDate("");
+				setProductSummary("");
+				setQuantity("");
+				setDestinationPort("");
 				openRecord({ kind: "deal", id: deal.id });
 			},
 			onError: (error) => toast.error(error.message),
@@ -89,15 +100,13 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 			<SheetTrigger asChild>
 				<Button>
 					<Icon icon={Add} data-icon="inline-start" />
-					New deal
+					{t("deal.new")}
 				</Button>
 			</SheetTrigger>
-			<SheetContent side="right">
+			<SheetContent side="right" closeLabel={t("common.close")}>
 				<SheetHeader>
-					<SheetTitle>New deal</SheetTitle>
-					<SheetDescription>
-						Every deal belongs to a company and has someone's name against it.
-					</SheetDescription>
+					<SheetTitle>{t("deal.new")}</SheetTitle>
+					<SheetDescription>{t("deal.description")}</SheetDescription>
 				</SheetHeader>
 
 				<form
@@ -114,28 +123,33 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 							amountCents: Number.isFinite(parsed)
 								? Math.round(parsed * 100)
 								: null,
-							expectedCloseDate: closeDate || null,
+							expectedOrderDate: expectedOrderDate || null,
+							productSummary: productSummary || null,
+							quantity: quantity || null,
+							destinationPort: destinationPort || null,
 						});
 					}}
 				>
 					<FieldGroup>
 						<Field>
-							<FieldLabel htmlFor={nameId}>Name</FieldLabel>
+							<FieldLabel htmlFor={nameId}>{t("deal.inquiryName")}</FieldLabel>
 							<Input
 								id={nameId}
 								value={name}
 								onChange={(event) => setName(event.target.value)}
-								placeholder="Stripe — Comp AI"
+								placeholder="Acme Imports — packaging inquiry"
 								autoComplete="off"
 								required
 							/>
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor="create-deal-company">Company</FieldLabel>
+							<FieldLabel htmlFor="create-deal-company">
+								{t("deal.customer")}
+							</FieldLabel>
 							<Select value={company} onValueChange={setCompany}>
 								<SelectTrigger id="create-deal-company">
-									<SelectValue placeholder="Choose a company" />
+									<SelectValue placeholder={t("deal.chooseCustomer")} />
 								</SelectTrigger>
 								<SelectContent>
 									{(companies.data ?? []).map((option) => (
@@ -148,10 +162,12 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor="create-deal-owner">Owner</FieldLabel>
+							<FieldLabel htmlFor="create-deal-owner">
+								{t("deal.owner")}
+							</FieldLabel>
 							<Select value={resolvedOwner} onValueChange={setOwnerId}>
 								<SelectTrigger id="create-deal-owner">
-									<SelectValue placeholder="Choose an owner" />
+									<SelectValue placeholder={t("deal.chooseOwner")} />
 								</SelectTrigger>
 								<SelectContent>
 									{(users.data ?? []).map((user) => (
@@ -164,7 +180,9 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor="create-deal-stage">Stage</FieldLabel>
+							<FieldLabel htmlFor="create-deal-stage">
+								{t("deal.stage")}
+							</FieldLabel>
 							<Select value={stage} onValueChange={setStage}>
 								<SelectTrigger id="create-deal-stage">
 									<SelectValue />
@@ -172,19 +190,18 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 								<SelectContent>
 									{OPEN_STAGES.map((value) => (
 										<SelectItem key={value} value={value}>
-											{dealStageLabel(value)}
+											{dealStageLabel(value, language)}
 										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
-							<FieldDescription>
-								A new deal is an open deal — close it from the pipeline once
-								there is an outcome to record.
-							</FieldDescription>
+							<FieldDescription>{t("deal.stageDescription")}</FieldDescription>
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={amountId}>Amount (USD)</FieldLabel>
+							<FieldLabel htmlFor={amountId}>
+								{t("deal.estimatedAmount")}
+							</FieldLabel>
 							<Input
 								id={amountId}
 								value={amount}
@@ -196,12 +213,51 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 						</Field>
 
 						<Field>
-							<FieldLabel htmlFor={closeDateId}>Expected close date</FieldLabel>
+							<FieldLabel htmlFor={productId}>
+								{t("company.productInterest")}
+							</FieldLabel>
+							<Input
+								id={productId}
+								value={productSummary}
+								onChange={(event) => setProductSummary(event.target.value)}
+								placeholder={t("deal.productPlaceholder")}
+								autoComplete="off"
+							/>
+						</Field>
+
+						<Field>
+							<FieldLabel htmlFor={quantityId}>{t("deal.quantity")}</FieldLabel>
+							<Input
+								id={quantityId}
+								value={quantity}
+								onChange={(event) => setQuantity(event.target.value)}
+								placeholder={t("deal.quantityPlaceholder")}
+								autoComplete="off"
+							/>
+						</Field>
+
+						<Field>
+							<FieldLabel htmlFor={destinationId}>
+								{t("deal.destination")}
+							</FieldLabel>
+							<Input
+								id={destinationId}
+								value={destinationPort}
+								onChange={(event) => setDestinationPort(event.target.value)}
+								placeholder={t("deal.destinationPlaceholder")}
+								autoComplete="off"
+							/>
+						</Field>
+
+						<Field>
+							<FieldLabel htmlFor={expectedOrderDateId}>
+								{t("deal.expectedOrderDate")}
+							</FieldLabel>
 							<DatePicker
-								id={closeDateId}
-								value={closeDate}
-								onChange={setCloseDate}
-								placeholder="No date yet"
+								id={expectedOrderDateId}
+								value={expectedOrderDate}
+								onChange={setExpectedOrderDate}
+								placeholder={t("deal.noDate")}
 							/>
 						</Field>
 					</FieldGroup>
@@ -214,10 +270,10 @@ export function CreateDealSheet({ companyId }: { companyId?: string }) {
 						disabled={create.isPending || !ready}
 					>
 						{create.isPending ? <Spinner /> : null}
-						Add deal
+						{t("deal.add")}
 					</Button>
 					<SheetClose asChild>
-						<Button variant="outline">Cancel</Button>
+						<Button variant="outline">{t("common.cancel")}</Button>
 					</SheetClose>
 				</SheetFooter>
 			</SheetContent>
