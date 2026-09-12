@@ -1,5 +1,7 @@
 # Plan — Agentic CRM (HubSpot replacement)
 
+> **Superseded.** This describes the pre-pivot HubSpot-style product. The repo is now a foreign-trade CRM — see [`foreign-trade-crm.md`](foreign-trade-crm.md). Kept for reference.
+
 A lightweight, opinionated CRM for our sales team. Companies are the top-level
 object; Contacts and Deals hang off them; everything that happens is an
 **Activity** on a timeline. Company knowledge (logo, description, industry,
