@@ -28,7 +28,8 @@ function ingestionDb(
 	},
 	racesOnCreate = false,
 	knownContact?: { id: string; email: string; companyId: string },
-	inquiryId?: string,
+	filedThread?: { companyId: string; contactId: string | null },
+	inquiries: string[] = [],
 ): Db {
 	let messageLookups = 0;
 	return {
@@ -46,8 +47,8 @@ function ingestionDb(
 			updateMany: async () => ({ count: knownContact ? 1 : 0 }),
 		},
 		deal: {
-			findMany: async () => (inquiryId ? [{ id: inquiryId }] : []),
-			updateMany: async () => ({ count: inquiryId ? 1 : 0 }),
+			findMany: async () => inquiries.map((id) => ({ id })),
+			updateMany: async () => ({ count: inquiries.length }),
 		},
 		emailMessage: {
 			findUnique: async () => {
@@ -92,7 +93,15 @@ function ingestionDb(
 			},
 		},
 		emailThread: {
-			findUnique: async () => null,
+			findUnique: async () =>
+				filedThread
+					? {
+							id: "thread-1",
+							companyId: filedThread.companyId,
+							contactId: filedThread.contactId,
+							activity: { dealId: null },
+						}
+					: null,
 			upsert: async (args: { create: Record<string, unknown> }) => {
 				state.threadCreate = args.create;
 				return { id: "thread-1" };
@@ -345,5 +354,80 @@ describe("mailbox ingestion", () => {
 			contactId: null,
 		});
 		expect(reported).toMatchObject({ threadId: "thread-1" });
+	});
+
+	it("links a filed thread's message to the inquiry its INQ number names", async () => {
+		const state: IngestionState = {};
+		let reported: Record<string, unknown> | undefined;
+		const db = ingestionDb(
+			state,
+			undefined,
+			false,
+			undefined,
+			{ companyId: "company-1", contactId: "contact-1" },
+			["inquiry-1"],
+		);
+		const ingestion = new MailIngestionService(
+			db,
+			new ActivityStampService(db),
+			{
+				mailReceived: async (input: Record<string, unknown>) => {
+					reported = input;
+				},
+			} as never,
+		);
+		const mailbox = await ingestion.forMailbox({
+			source: "gmail",
+			userId: "member-1",
+			mailboxAddress: "sales@example.test",
+			autoCreate: false,
+		});
+
+		const result = await mailbox.ingest({
+			...message(),
+			body: "Regarding INQ-2026-001, please confirm the price.",
+		});
+
+		expect(result.linked).toBe(true);
+		expect(state.activityCreate).toMatchObject({
+			companyId: "company-1",
+			contactId: "contact-1",
+			dealId: "inquiry-1",
+		});
+		expect(reported).toBeUndefined();
+	});
+
+	it("leaves the inquiry unset when the INQ number is ambiguous", async () => {
+		const state: IngestionState = {};
+		const db = ingestionDb(
+			state,
+			undefined,
+			false,
+			undefined,
+			{ companyId: "company-1", contactId: "contact-1" },
+			["inquiry-1", "inquiry-2"],
+		);
+		const ingestion = new MailIngestionService(
+			db,
+			new ActivityStampService(db),
+			NOOP_AGENT,
+		);
+		const mailbox = await ingestion.forMailbox({
+			source: "gmail",
+			userId: "member-1",
+			mailboxAddress: "sales@example.test",
+			autoCreate: false,
+		});
+
+		const result = await mailbox.ingest({
+			...message(),
+			body: "Regarding INQ-2026-001, please confirm the price.",
+		});
+
+		expect(result.linked).toBe(true);
+		expect(state.activityCreate).toMatchObject({
+			companyId: "company-1",
+			dealId: null,
+		});
 	});
 });
