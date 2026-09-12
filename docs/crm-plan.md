@@ -2,12 +2,19 @@
 
 A lightweight, opinionated CRM for our sales team. Companies are the top-level
 object; Contacts and Deals hang off them; everything that happens is an
-**Activity** on a timeline. Company knowledge is filled in by an agent using
-[Context.dev](https://docs.context.dev) rather than typed by a human.
+**Activity** on a timeline. Company knowledge is filled in by an agent through
+the saved research-provider seam — Tavily or Context.dev — rather than typed by
+a human.
 
 This is the build plan: decisions, data model, contracts, conventions and
 phased delivery. Read it with [`AGENTS.md`](../AGENTS.md),
 [`design.md`](./design.md) and [`api.md`](./api.md).
+
+> The foreign-trade lifecycle now uses **Inquiry**, not Deal, and its canonical
+> stages are `NEW_INQUIRY`, `CONTACTED`, `REPLIED`, `RFQ_RECEIVED`, `QUOTED`,
+> `SAMPLE`, `NEGOTIATING`, `PROFORMA_INVOICE`, `WON`, `LOST` and `UNQUALIFIED`.
+> Older SaaS stage names elsewhere in this historical plan are superseded. See
+> [`CONTEXT.md`](../CONTEXT.md).
 
 ---
 

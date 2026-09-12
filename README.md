@@ -145,16 +145,17 @@ failed call at a time, and it prints the list at startup:
 ```
 [agent] on   LinkedIn (RAPIDAPI_KEY)
 [agent] off  Web research (PERPLEXITY_API_KEY)
-[agent] off  Company brand data (Settings → General)
+[agent] off  Company research (Settings → General)
 ```
 
-**Company brand data is [Context](https://link.context.dev/crm)** — the logo, the
-colours, the industry and the real name behind a domain, which is the difference
-between an account that arrives as itself and one that arrives as a grey square with
-its initials in it. It is the one key that is asked for rather than configured: it
-lives in a row, the onboarding asks for it, and **Settings → General** changes it
-afterwards, because a self-hoster's admin cannot redeploy to set an environment
-variable.
+**Company research is a saved provider.** [Tavily](https://tavily.com) supplies
+web search and clean website evidence, while the active model turns that evidence
+into CRM fields and research briefs. Its official keyless mode works immediately
+with a free rate limit; adding a Tavily key raises the limit. Existing installs may
+keep Context.dev for its richer structured brand, industry, location and social
+data. The provider and optional key live in the database, onboarding asks for the
+choice, and **Settings → General** changes it afterwards. Saved keys are encrypted
+and only their last four characters are returned.
 
 **The sandbox has no network and no database.** Turning it on is what gives the model
 a shell — the difference between a tool-caller and something that can keep a dossier,
@@ -184,7 +185,7 @@ A [Turborepo](https://turborepo.dev) monorepo on [Bun](https://bun.com), deploye
 | | |
 | --- | --- |
 | **Agent** | [eve](https://eve.dev) — durable sessions, tools, skills, schedules, sandboxes |
-| **Model** | [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) — no provider SDK, and OIDC on Vercel means no key to manage |
+| **Model** | Provider registry for OpenAI, Anthropic, Gemini, xAI, DeepSeek, OpenRouter, Vercel AI Gateway, Chinese providers, and custom compatible endpoints |
 | **Sandbox** | [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) in production, Docker or microsandbox locally |
 | **Front end** | [Next.js](https://nextjs.org) App Router · [shadcn/ui](https://ui.shadcn.com) · [nuqs](https://nuqs.dev) for URL state |
 | **API** | [NestJS](https://nestjs.com) with [nestjs-trpc](https://nestjs-trpc.io) — HTTP, auth, tRPC, Google sync |
@@ -300,7 +301,8 @@ short version:
 | `RAPIDAPI_KEY` | Lets the agent read LinkedIn profiles for identity. |
 | `AGENT_BRIDGE_SECRET` | Lets a rep talk to the agent from a contact's **Agent** tab. |
 | `REDIS_URL` | A shared cache. Without it, per-instance and in-memory. |
-| `CRON_SECRET` | Guards the Gmail/Calendar sync route. Required to use it. |
+| `CRON_SECRET` | Guards the deployed Gmail/Calendar and Zoho Mail sync route. Local development schedules sync inside the API process. |
+| `CREDENTIALS_ENCRYPTION_KEY` | Base64-encoded 32-byte key for encrypting saved model-provider keys and Zoho IMAP passwords. |
 
 ## Tasks
 

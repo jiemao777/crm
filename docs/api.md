@@ -65,6 +65,20 @@ slower than the request that produced it.
 If you are about to add a vendor client to `apps/api`, you want
 `apps/agent/agent/lib` instead.
 
+### Model-provider settings stop at the Agent seam
+
+The Settings router may list, save, activate, test and remove model-provider
+configuration. That does not make Nest a model client. It authorizes owners and
+admins, normalizes provider presets, encrypts API keys, writes
+`AgentModelProvider`, and returns only a masked hint.
+
+A connection test crosses the authenticated Agent bridge through
+`AgentProviderVerificationService`; the Agent constructs the provider adapter
+and makes the test generation. The API never imports a model SDK and never
+interprets a provider error. Research-provider verification follows the same
+seam: configuration is data, while exercising an intelligence capability
+belongs to the process that owns it.
+
 ## There is exactly one organization, and it is not a tenancy boundary
 
 This is an internal tool behind Google sign-in, and it is **single tenant**.
@@ -160,7 +174,7 @@ called, who works here, and what do we sell — and for nothing else.
     the key form — but there is no reason to wait for that answer before
     starting the other read.
   - **If the cost ever matters, cache it in the API**, where there is a place
-    to invalidate from: `settings.setResearchKey` and `WorkspaceService.update`
+    to invalidate from: `settings.setResearchProvider` and `WorkspaceService.update`
     are the only two writers, and `cache-manager` is already the documented
     pattern for exactly that shape. Do not put it back in the browser.
   - **`/sign-in`, `/grant-access` and `/eve` are ungated.**
@@ -186,34 +200,24 @@ called, who works here, and what do we sell — and for nothing else.
     through. The alternative is an install that cannot reach its own API
     redirecting every request to a form that cannot be submitted.
 - **There is a second gate behind the first**, `/onboarding/research`, which
-  asks for the Context API key that gives the agent somewhere to look — see
-  [the environment rules](./environment.md#the-context-key-is-asked-for-not-configured).
-  It is the same shape as the onboarding gate and shares its machinery: a read
-  (`settings.researchKey`), a `required`/`settled`/`unknown` answer, an httpOnly
-  marker so it is asked once per browser, and fail-open on an unreachable API.
+  asks which research provider gives the agent somewhere to look — see
+  [the environment rules](./environment.md#the-research-provider-is-saved-not-deployed).
+  It is the same shape as the onboarding gate: a read
+  (`settings.researchProvider`), a `required`/`settled`/`unknown` answer, and
+  fail-open on an unreachable API.
   - **The order is fixed and the second read is not made early.** A rep who has
-    not named the workspace goes to `/onboarding` and `settings.researchKey` is
-    never called — there is no point asking the second question while the first
-    is open, and the test pins that the call count stays at zero.
-  - **A settled workspace is remembered even while the key is outstanding.**
-    The marker is written onto the *redirect* to the key form, so the workspace
-    is not re-read on every request during the window a rep is being asked
-    something else.
-  - **There is no way past it but to answer, and that is the point.** It had a
-    Skip, and Skip was the one path that could strand an install: every company
-    added afterwards sits `PENDING` waiting for a key nobody is going to be
-    asked for again, and nothing anywhere says so. A gate whose escape hatch
-    silently accumulates broken records is not a gate. If it should become
-    optional again, the missing piece is somewhere that surfaces *N companies
-    are waiting on a key* — not a link that hides the question.
-  - **Settings → General is the same write.** `settings.setResearchKey` is
-    posted by both, so there is one write path and no second opinion about what
-    a valid key looks like — including the check: that mutation asks the agent
-    whether Context recognises the key and refuses to save one that comes back
-    `401`. See
-    [the environment rules](./environment.md#the-context-key-is-asked-for-not-configured)
-    for why the call is the agent's to make and why a check that cannot be made
-    still saves.
+    not named the workspace goes to `/onboarding` and
+    `settings.researchProvider` is never called. The test pins that call count
+    at zero.
+  - **There is no Skip.** The form can choose Tavily's official keyless mode,
+    which requires no account or secret, so there is no reason to strand future
+    companies in `PENDING` with no source configured.
+  - **Settings → General is the same write.**
+    `settings.setResearchProvider` is posted by both. Keyed configurations are
+    checked over the Agent bridge and encrypted before persistence; Tavily
+    keyless stores only the provider choice. See
+    [the environment rules](./environment.md#the-research-provider-is-saved-not-deployed)
+    for why the vendor call belongs to the Agent.
 - **The name arrives as a placeholder, not as an answer.** A workspace is
   created as `DEFAULT_WORKSPACE_NAME` — the literal string `CRM` — and the field
   is empty with that behind it. It used to be derived from the sign-in domain,

@@ -205,9 +205,9 @@ Two sharp edges:
 Every outside source the agent can reach is optional, and it is designed to run
 with none of them. A missing key removes a place to look; it is never an error.
 
-The company research key is the exception and it is **not in this table**,
-because it is not a variable at all — see
-[the next section](#the-context-key-is-asked-for-not-configured).
+The company research provider is the exception and is **not in this table**,
+because it is a saved setting rather than a variable — see
+[the next section](#the-research-provider-is-saved-not-deployed).
 
 | Variable | What it adds |
 | --- | --- |
@@ -215,7 +215,8 @@ because it is not a variable at all — see
 | `RAPIDAPI_KEY` | LinkedIn profiles via LinkDAPI — name, title, employer, tenure |
 | `GITHUB_TOKEN` | Raises the GitHub rate limit from 60/hour when matching profiles |
 | `BLOB_READ_WRITE_TOKEN` | Mirrors every logo and profile picture into Vercel Blob rather than linking them. Read by the API and the seed too — see below |
-| `AI_GATEWAY_API_KEY` | The model. Not needed on Vercel, where OIDC handles it |
+| `AI_GATEWAY_API_KEY` | Legacy Vercel AI Gateway fallback. Not needed on Vercel, where OIDC handles it |
+| `ZAI_API_KEY`, `ZAI_API_BASE_URL`, `ZAI_MODEL` | Legacy OpenAI-compatible fallback while an install migrates to a saved provider |
 | `AGENT_BRIDGE_SECRET` | Lets a rep talk to the agent from the contact sheet — [the bridge](./agent.md#the-bridge) |
 
 `apps/agent/agent/lib/capabilities.ts` is the single place that knows which are
@@ -225,80 +226,68 @@ agent plans around what it actually has, and gives the tools a shared
 research budget is charged, so an install without a key does not pay for the
 discovery on every contact.
 
-### The Context key is asked for, not configured
+### The model provider is saved, not deployed
 
-**`CONTEXT_DEV_API_KEY` is not a variable in this repo, and adding one back
-would be a second answer to a question that already has one.** Nothing reads it
-— not `.env.example`, not `env.validation.ts`, not any `turbo.json`. The key
-lives in `AppSetting` beside the agent's model, it is asked for at
-`/onboarding/research`, and **Settings → General** changes it afterwards.
+Settings → General stores named model-provider configurations for OpenAI,
+Anthropic, Google Gemini, xAI, DeepSeek, OpenRouter, Vercel AI Gateway, ZAI,
+OpenCode, Qwen, Moonshot, MiniMax, and custom compatible endpoints. A saved row
+owns the provider kind, wire protocol, base URL, native model id and context
+window. `AppSetting.agentProviderId` selects one.
 
-Same reason as [SSO](./api.md#sso-is-a-row-not-a-deployment): an admin who
-cannot redeploy cannot set an environment variable. It goes further than SSO
-does, because this is not a key an install can sensibly do without — it decides
-whether a company arrives as itself or as a grey square with its initials in
-it — so [the proxy asks for it](./api.md#the-gate-is-proxyts-and-it-is-answered-once-per-browser)
-rather than leaving it to be discovered on a settings page nobody visits.
+The API key is encrypted with `CREDENTIALS_ENCRYPTION_KEY`, a base64-encoded
+32-byte key shared by the API and Agent. The browser receives only the final
+four characters. The API persists configuration but never calls a model; the
+Agent owns connection testing and runtime adapter selection. A missing or
+unreadable key falls back to the compiled legacy model rather than preventing
+the rest of the CRM from starting.
 
-- **An install that had the variable set is asked for the key again, and that
-  is the intended upgrade.** Nothing adopts the old value — no boot-time
-  migration, no fallback — so the first navigation after deploying lands
-  everyone on `/onboarding/research`, where they paste the key they already
-  have. It is one interruption, once, in exchange for the answer living in one
-  place rather than two — and it cannot be dismissed, because a dismissed gate
-  is an install quietly filling up with companies that have no logo.
-- **Nothing is lost in the meantime, and the wait is not a queue.** A `brand`
-  task with nowhere to look is consumed and marked done — but it settles
-  `SKIPPED` *before* anything marks the row `RUNNING`, and `settle` only writes
-  over a `RUNNING` row, so the company stays `PENDING`. `PENDING` is exactly
-  what the sign-in sweep re-queues, so the work is recovered from the record
-  rather than held in the queue. `test/keyless-brand.integration.spec.ts` pins
-  it, because a `settle` that wrote unconditionally would strand every company
-  added before the key with nothing to say so.
-- **Saving the key picks that work up immediately.**
-  `settings.setResearchKey` runs the company sweep itself rather than leaving it
-  to the next sign-in, because the person who just fixed it is standing there.
-  It is fire-and-forget: a sweep that fails logs and the sign-in one still
-  catches up. Contacts are not swept here — only one of the three portrait
-  sources is Context — and they are picked up on the next sign-in as before.
-- **`readContextDevKey` in [`@crm/db/settings`](../packages/db/src/settings.ts)
-  is the only reader**, and it reads one column. Everything downstream —
-  `contextDevKey()` in the agent's `capabilities.ts`, the client in
-  `lib/context-dev.ts`, the API's `settings.researchKey` — goes through it, so
-  there is exactly one place that knows where the key is kept.
-- **It is read live, not at boot.** There is no cache in front of it, so a key
-  pasted into the settings page applies to the very next vendor call rather than
-  to the next deployment. Each read is one indexed row in front of a lookup that
-  is about to make an HTTP request anyway.
-- **A database that cannot be read is a capability that is off**, not an
-  exception. `contextDevKey()` logs and returns null, because a missing source
-  must never throw — the rule at the top of this section, and the reason the
-  agent keeps running against everything else it has.
-- **The key is never read back.** The API returns whether one is set and its
-  last four characters, and nothing returns the key itself. Same rule as an SSO
-  client secret.
-- **A wrong key is refused at the point it is typed, and the agent is what
-  checks it.** Checking means calling Context, and [a vendor client in the API
-  is a bug](./api.md#intelligence-never-lives-in-the-api) — so
-  `settings.setResearchKey` asks the agent over the bridge
-  (`POST /internal/crm/verify-key`) and only writes the row if the answer is not
-  *invalid*. The agent already owns the client, the error classification and the
-  key, so nothing about Context.dev is learned twice.
-  - **The probe costs nothing.** A brand lookup only bills when it resolves a
-    brand, and a free-provider address is refused with a documented `422`
-    before any resolution — so `key-check@gmail.com` reaches Context, proves
-    the key authenticates, and is never billed. Measured at about half a second.
-  - **`401` is the only answer that means the key is wrong.** A `403` about the
-    plan, a `422` refusing the probe, a `429`, a `500` — all of those were
-    served *after* the key authenticated, so the key is good and only the probe
-    was refused. `classifyKey` in `lib/context-dev.ts` holds that rule and
-    `test/verify-key.spec.ts` pins every branch of it.
-  - **A check that cannot be made is not a failed check.** No
-    `AGENT_BRIDGE_SECRET`, an agent that is down, a timeout — all return
-    `unknown`, and an unknown answer *saves the key* and logs that it went in
-    unverified. The alternative is an install whose agent is not up yet being
-    unable to finish onboarding, which is a worse failure than an unchecked
-    key: the key is still checked by the first task that uses it.
+`MAIL_CREDENTIALS_ENCRYPTION_KEY` is accepted as an upgrade bridge for installs
+that already encrypted Zoho passwords. New installs set only the general name.
+The key must remain stable: replacing it makes saved model and research
+provider keys, plus Zoho passwords, unreadable.
+
+### The research provider is saved, not deployed
+
+**`TAVILY_API_KEY` and `CONTEXT_DEV_API_KEY` are not environment variables in
+this repo.** Research configuration lives in `AppSetting`, is chosen at
+`/onboarding/research`, and is changed from **Settings → General**. An admin who
+cannot redeploy can still change the source or rotate its key.
+
+The two adapters currently available are:
+
+- **Tavily.** Its official keyless mode needs no account, card or secret and has
+  a free rate limit. A Tavily API key raises that limit. Search results provide
+  deterministic brand basics and the active model turns website evidence into
+  typed research briefs.
+- **Context.dev.** Existing installs can retain its richer structured brand,
+  industry, location and social data. It always requires an API key.
+
+`researchProviderKind`, `encryptedResearchApiKey` and `researchApiKeyHint` are
+the persisted interface. `contextDevApiKey` remains only as a plaintext upgrade
+bridge for databases that already contain one; choosing or resaving a provider
+clears it. New keys are encrypted with `CREDENTIALS_ENCRYPTION_KEY`, and the
+browser receives only the last four characters.
+
+- **`readStoredResearchProvider` in
+  [`@crm/db/research-provider`](../packages/db/src/research-provider.ts) is the
+  only persisted read.** The API uses it for masked settings and the Agent uses
+  it to resolve the live adapter. There is no cache, so a saved change applies
+  to the next vendor call.
+- **A missing provider removes the capability.** A `brand` task leaves the
+  company `PENDING`, and the sign-in sweep can recover it later. Saving a
+  provider immediately starts the same company sweep rather than waiting for a
+  new sign-in.
+- **The API never calls either vendor.**
+  `settings.setResearchProvider` sends a transient candidate to
+  `POST /internal/crm/verify-research-provider` over the authenticated Agent
+  bridge. Tavily verifies keyed access through its free `/usage` endpoint;
+  Context retains its non-billing probe. A `401` is rejected. An unavailable
+  Agent or vendor is `unknown`, which saves the configuration so onboarding is
+  not coupled to another process being online.
+- **Tavily keyless stores no credential.** It works even when
+  `CREDENTIALS_ENCRYPTION_KEY` is absent. A keyed Tavily or Context
+  configuration, model-provider key, and Zoho password all require the shared
+  encryption key.
 
 `BLOB_READ_WRITE_TOKEN` is the one entry in that table the agent does not own
 alone, which is why it is also declared in `apps/api/src/config/env.validation.ts`
@@ -346,9 +335,31 @@ account that has stopped working.
 imported: Gmail records the current `historyId` on its first pass and imports
 nothing, and Calendar reads from `now` onwards.
 
+### Zoho Mail IMAP
+
+Zoho is an optional mailbox connection in **Settings → Connections**. IMAP sync
+reads the mailbox, while outgoing CRM messages use Zoho SMTP. Read/star/trash
+state is stored locally in the CRM.
+It reads `INBOX` and the provider’s `Sent` folder over TLS on port 993; it never
+moves, marks, or deletes a message in Zoho. Each folder has its own
+`UIDVALIDITY` and UID cursor, so scheduled runs fetch only messages after the
+connection point. The sync uses standard `Message-ID`, `In-Reply-To`, and
+`References` headers to group threads, stores plain text only, and never opens
+an IMAP IDLE connection.
+
+Create an app password in Zoho when MFA is enabled. Choose the mailbox region
+shown in the connection form (`imap.zoho.com`, `.eu`, `.in`, `.com.au`, `.jp`,
+`.com.cn`, or `.sa`). The password is AES-256-GCM encrypted before it reaches
+Postgres, is never returned by the API, and can be replaced from the connection
+card. Mail attaches to a known customer or contact; it attaches to an inquiry
+only when its subject or body explicitly contains that customer’s `INQ-…`
+number.
+
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `CRON_SECRET` | in deployed environments | Bearer guard on `POST /internal/sync/google`. Vercel sends it automatically as `Authorization: Bearer $CRON_SECRET`. Minimum 16 characters; the route **fails closed** if unset, so locally the cron simply never runs. |
+| `CRON_SECRET` | in deployed environments | Bearer guard on `POST /internal/sync/google`. Vercel sends it automatically as `Authorization: Bearer $CRON_SECRET`. Minimum 16 characters; the route **fails closed** if unset. Development calls the same sync service inside the API process and needs no secret. |
+| `CREDENTIALS_ENCRYPTION_KEY` | for saved secrets | A base64-encoded 32-byte key used to encrypt model-provider API keys and Zoho IMAP app passwords at rest. |
+| `MAIL_CREDENTIALS_ENCRYPTION_KEY` | upgrades only | Legacy name accepted while an existing install moves to `CREDENTIALS_ENCRYPTION_KEY`. |
 
 The absences are deliberate:
 
@@ -371,8 +382,11 @@ Two things to do in Google Cloud before this works:
   Internal app needs no further review. Going External later means the full
   review, so this is a decision, not a checkbox.
 
-The cron is declared in `apps/api/vercel.json` at `*/5 * * * *`. Minute-level
-schedules need a Pro plan; on Hobby it silently becomes daily.
+The deployed cron is declared in the generated API function configuration at
+`*/5 * * * *`. Minute-level schedules need a Pro plan; on Hobby it silently
+becomes daily. In development, the API runs one sync after bootstrap and then
+every five minutes. That local lifecycle adapter is disabled in test and
+production, so it cannot compete with the deployed scheduler.
 
 ## Database
 

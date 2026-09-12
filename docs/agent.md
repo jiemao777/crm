@@ -22,42 +22,50 @@ Read the relevant guide there before writing eve code and then check your eve sk
 from what you assumed — see the note on principal mapping under [the
 bridge](#the-bridge).
 
-## The model is a setting, not a deploy
+## The model provider is a setting, not a deploy
 
-The agent runs on **`zai/glm-5.2-fast`** by default, and a rep can change that
-on the settings page without touching the code.
+Settings → General manages named provider configurations for OpenAI, Anthropic,
+Google Gemini, xAI, DeepSeek, OpenRouter, Vercel AI Gateway, ZAI, OpenCode,
+Qwen, Moonshot, MiniMax, and custom endpoints using OpenAI Chat Completions,
+OpenAI Responses, Anthropic Messages, or Google Generative AI.
 
-`DEFAULT_AGENT_MODEL` lives in [`@crm/db/settings`](../packages/db/src/settings.ts)
-because two processes need the same answer — the agent, to compile its
-fallback, and the API, to tell the settings page what "Default" resolves to.
-A second copy of that string is a second answer to the question.
+`packages/db/src/agent-provider.ts` is the provider registry and persisted
+interface. `apps/agent/agent/lib/model-provider.ts` is the deep runtime module:
+callers hand it one normalized configuration and receive an AI SDK
+`LanguageModel`; provider SDKs, base URLs, credential rules and protocol choice
+stay behind that seam.
 
-- **The choice is a row, not an env var.** `AppSetting` holds one record, and
-  `agent.ts` resolves it through `defineDynamic` on `session.started` — so a
-  change applies to the next session rather than the next deployment, which
-  matters in an install whose owner cannot redeploy. A conversation already
-  open finishes on the model it started with, and that is deliberate: prompt
-  caches are per model, so switching part-way re-ingests the thread at uncached
-  prices.
-- **The window travels with the id.** eve never inherits
-  `modelContextWindowTokens` from the fallback, so `lib/model.ts` always sends
-  it. A model with a smaller window than the default would otherwise be
-  compacted against a number it does not have, and the turn fails at the
-  provider after the context has been assembled and paid for.
-- **A failed read degrades, it does not throw.** No row, no database, a
-  resolver that raises — all of them leave the compiled fallback in force.
-  `lib/model.ts` logs the reason, because the alternative is a session quietly
-  running on a model nobody chose.
-- **The chooser only offers models this agent can run.** Every read the agent
-  has is a tool, so `ModelCatalogService` filters the gateway catalog to
-  language models tagged `tool-use`. An unreachable gateway makes the chooser
-  read-only rather than failing the page, and the id already stored keeps
-  running.
-- **Not a frontier model, on purpose.** The hard part of this job is refusing a
-  plausible-looking wrong answer, and that is enforced by the tools and the
-  evidence model below rather than by model strength. What the job does want is
-  a long window — a company preamble hands over every contact on the account —
-  and answers fast enough that the sheet's Agent tab reads as a conversation.
+- **The configuration is a row.** `AgentModelProvider` stores the provider kind,
+  protocol, base URL, native model id and context window.
+  `AppSetting.agentProviderId` selects one. The legacy `agentModelId` and
+  `ZAI_*`/Gateway environment paths remain only as a compiled fallback while an
+  install migrates.
+- **Credentials are encrypted and never read back.** The API encrypts a key with
+  `CREDENTIALS_ENCRYPTION_KEY`, returns only its final four characters, and
+  restricts every write and connection test to owners and admins. The Agent
+  shares the encryption key because it alone turns the row into a provider
+  adapter. Neither process logs the credential.
+- **The API never calls the model.** `POST /internal/crm/verify-model-provider`
+  accepts a transient candidate over the authenticated Agent bridge and runs a
+  tiny required-tool-call generation in the Agent. The API only validates, authorizes,
+  encrypts and persists.
+- **Direct models resolve at `step.started`.** Eve requires live
+  `LanguageModel` objects to be returned from that scope; gateway model ids may
+  still resolve at `session.started`. `modelContextWindowTokens` travels with
+  every direct selection because Eve never inherits the selected model's window
+  from the compiled fallback.
+- **Failures degrade to the compiled fallback.** A missing row, an unreadable
+  credential, an invalid adapter or a database failure is logged without the
+  secret and leaves the old fallback in force. Provider quota and availability
+  errors remain ordinary model-call failures rather than moving intelligence
+  into Nest.
+- **Custom does not mean executable configuration.** The web form accepts a
+  protocol, HTTP(S) base URL, model id, context window and optional key. It does
+  not accept Pi-style `!command` resolution or arbitrary executable auth hooks;
+  those are suitable for a local CLI and would be remote command execution in a
+  web application. Provider credentials are API keys in this release; Pi-style
+  ChatGPT, Claude and other subscription OAuth flows are deliberately out of
+  scope.
 
 ## Pictures are copied, never linked
 
@@ -152,9 +160,11 @@ lane a row lands in is decided by one list — `DIRECT_KINDS` in
 
 **Neither kind in the visible lane has anything in it to decide.** A portrait is
 three reads keyed on identifiers already on the record and a byte copy. A brand
-is a domain in, Context.dev out, map, mirror, write — `lib/brand.ts`, and there
-is not one judgement in the whole path. Routing either through a session buys a
-context window in order to make no decisions with it.
+is a domain in, the active research adapter out, map, mirror, write —
+`lib/brand.ts`, and there is not one judgement in the whole path. Context
+returns rich structured brand data; Tavily deterministically supplies the
+homepage title, description and favicon from ranked results. Routing either
+through a session buys a context window in order to make no decisions with it.
 
 Routed through a session it also did not work, twice, the same way. Seven queued
 faces sat behind sixty LLM sessions at five a minute and had not landed twenty
@@ -181,6 +191,7 @@ reads them, and two copies of an ordering is two orderings.
 | `portrait` | 800 | the face |
 | `workspace` | 500 | who *we* are — every later session opens with it |
 | `requested` | 300 | a rep pressed Research |
+| `mail-intake` | 250 | an unlinked email needs classification and filing |
 | `meeting` | 200 | a meeting is coming |
 | `identify` | 100 | a new contact |
 | `sweep` | 50 | the sign-in backfill |
@@ -244,30 +255,59 @@ and `FOR UPDATE SKIP LOCKED`, which already handle it.
 `AGENT_BRIDGE_SECRET` authorises it, and **unset means the route refuses rather
 than opens**, the same rule the rep bridge follows.
 
-### Checking a key belongs to the person who typed it
+### Checking a provider belongs to the Agent
 
-`POST /internal/crm/verify-key` is the crm channel's second internal route, and
-it exists because the API is not allowed to call Context.dev and this agent
-already does. It takes a candidate key, probes with it, and answers `valid`,
-`invalid` or `unknown` — no session, no model, no task row, because there is
-nothing here to decide.
+`POST /internal/crm/verify-research-provider` is the crm channel's second
+internal route. It takes a transient provider kind and optional candidate key,
+then answers `valid`, `invalid` or `unknown` — no session, model or task row.
 
-- **The probe is free and it is chosen to be.** A brand lookup only bills when
-  it resolves a brand, and a free-provider address is refused with a documented
-  `422` first, so `key-check@gmail.com` authenticates without buying anything.
-  Do not "improve" this to a real domain: that is ten credits every time
-  somebody saves a key, including every time they correct a typo.
-- **`classifyKey` rejects on `401` and nothing else.** Every other status came
-  back *after* the key was accepted, so it says something about the plan, the
-  quota or Context's afternoon — not about the key. Treating a `429` as a bad
-  key would refuse a perfectly good one at the worst possible moment.
-- **It is the candidate key, never the stored one.** `verifyKey` builds a
-  throwaway client from the argument, so checking a new key cannot be confused
-  with exercising the one already saved.
+- **Tavily keyless is already valid configuration.** It is an official API mode
+  and stores no secret. A keyed Tavily configuration authenticates through the
+  free `/usage` endpoint, so checking it spends no search credits.
+- **Context keeps its non-billing probe.** A free-provider address is refused
+  with a documented `422` before brand resolution, so
+  `key-check@gmail.com` proves authentication without spending ten credits.
+- **Only `401` rejects a key.** A quota, plan, rate-limit or vendor failure says
+  nothing reliable about the credential. Those are `unknown`, and an unknown
+  answer is saved so onboarding does not depend on the Agent being online.
+- **The candidate is never persisted by the bridge.** The API encrypts it only
+  after the Agent returns.
 
-The API's half is `ResearchKeyService`, and an `unknown` answer there saves the
-key anyway — see
-[the environment rules](./environment.md#the-context-key-is-asked-for-not-configured).
+The API's half is `ResearchProviderVerificationService`; see
+[the environment rules](./environment.md#the-research-provider-is-saved-not-deployed).
+
+### Parsing lead text
+
+`POST /internal/crm/extract-lead` handles the company form's pasted text and the
+Mail Center's explicit **Create customer** action. The API sends either the
+pasted text or the selected thread transcript with `AGENT_BRIDGE_SECRET`; the
+route performs one `generateText` call with a structured output schema and
+returns no session id or conversational history. It has no CRM tools, sandbox,
+connections or write capability.
+
+The API validates the response at the bridge boundary. `MailLeadIntakeService`
+files a valid result only after the rep pressed **Create customer**. An absent,
+invalid or unavailable Agent leaves the thread unchanged. The company form can
+still use `apps/app/lib/parse-lead.ts` to fill a form that the rep must review;
+that browser fallback never writes a record.
+
+### Filing incoming mail
+
+`MailIngestionService` stores every normalized Gmail and Zoho message before it
+asks what the message means. An unlinked thread creates a durable `mail-intake`
+`AgentTask` with the thread id, mailbox owner and the mailbox's customer-creation
+setting. No email classifier or lead parser runs in Nest.
+
+The task preamble includes up to twenty messages from the thread. The agent
+checks exact email addresses and domains with `search_crm`, then calls
+`file_mail_thread` once. That tool writes the category and any proven existing
+record ids. It leaves uncertain threads unlinked. Customer creation is accepted
+only when the mailbox owner enabled it and the task was dispatched for that
+same thread; the approval policy denies every other unattended creation.
+
+If the Agent deployment or bridge is absent, ingestion still stores the thread.
+The task remains available for a later dispatcher run and Mail Center can still
+show, search and manually file the messages.
 
 ### Catching up what was missed
 
@@ -368,19 +408,16 @@ A missing key removes a place to look. It is never an error, and it must never
 throw.
 
 **Not all of them are environment variables, which is why `capabilities()` is
-async.** The Context.dev key is a row a rep can set on Settings → General — see
-[the environment rules](./environment.md#the-context-key-is-asked-for-not-configured)
-— so the answer to *what can I use here* now involves a read, and `enabled()`
-and `capabilitiesMarkdown()` are awaited with it. `capabilitiesFrom()` and
-`markdownFor()` are the pure halves, which is what keeps
-`test/capabilities.spec.ts` a unit test rather than something that reports a
-different answer depending on what the developer happens to have saved locally.
+async.** The active research provider is a row set on Settings → General — see
+[the environment rules](./environment.md#the-research-provider-is-saved-not-deployed)
+— so the answer to *what can I use here* includes a database read.
+`capabilitiesFrom()` and `markdownFor()` remain the pure halves used by tests.
 
-`contextDevKey()` is the only resolver, and `lib/context-dev.ts` builds its
-client from it rather than from `process.env` — memoised on the key string, so
-replacing the key swaps the client and nothing else does. There is no cache in
-front of the read: a key saved in the browser applies to the next vendor call,
-not the next deploy.
+`lib/research-provider.ts` is the deep module. It resolves the stored provider
+live, decrypts a key only in the Agent, and exposes brand lookup and typed site
+extraction. `lib/context-dev.ts` and `lib/tavily.ts` are adapters
+behind it. There is no cache in front of the setting: a browser change applies
+to the next vendor call, not the next deployment.
 
 ## Budget, and deciding what to do next
 
