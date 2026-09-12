@@ -14,6 +14,7 @@
 		"./enums": "./src/generated/prisma/enums.ts",
 		"./favicon": "./src/favicon.ts",
 		"./images": "./src/images.ts",
+		"./inquiry-score": "./src/inquiry-score.ts",
 		"./research-provider": "./src/research-provider.ts",
 		"./safe-fetch": "./src/safe-fetch.ts",
 		"./settings": "./src/settings.ts",

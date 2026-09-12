@@ -8,6 +8,7 @@ export const TASK_KINDS = [
 	"recheck",
 	"company-profile",
 	"workspace-profile",
+	"inquiry-intelligence",
 ] as const;
 
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -25,6 +26,7 @@ export const PRIORITY = {
 	portrait: 800,
 	workspace: 500,
 	requested: 300,
+	inquiry: 275,
 	mail: 250,
 	meeting: 200,
 	identify: 100,
