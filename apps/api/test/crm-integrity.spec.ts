@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { ensureWorkspaceMembership } from "@crm/auth";
-import { db, EmailDirection } from "@crm/db";
+import { ActivityType, db, EmailDirection } from "@crm/db";
 import { AgentQueueService } from "../src/agent/agent-queue.service";
 import { AgentTriggerService } from "../src/agent/agent-trigger.service";
 import { AiExtractService } from "../src/agent/ai-extract.service";
@@ -18,6 +18,7 @@ const concurrentCompanyDomain = `concurrent-${suffix}.test`;
 const concurrentContactEmail = `contact-${suffix}@gmail.com`;
 const existingContactEmail = `existing-${suffix}@gmail.com`;
 const quotationDomain = `quotation-${suffix}.test`;
+const conversionDomain = `conversion-${suffix}.test`;
 const threadRoot = `<root-${suffix}@example.test>`;
 const sharedThreadRoot = `<shared-root-${suffix}@example.test>`;
 const sharedCalendarUid = `shared-calendar-${suffix}@example.test`;
@@ -59,7 +60,12 @@ async function clean() {
 	await db.company.deleteMany({
 		where: {
 			domain: {
-				in: [existingDomain, concurrentCompanyDomain, quotationDomain],
+				in: [
+					existingDomain,
+					concurrentCompanyDomain,
+					quotationDomain,
+					conversionDomain,
+				],
 			},
 		},
 	});
@@ -176,6 +182,62 @@ describe("CRM write integrity", () => {
 
 		expect(versions).toEqual([1, 2, 3, 4, 5]);
 		expect(await db.quotation.count({ where: { dealId: deal.id } })).toBe(5);
+	});
+
+	it("converts a quotation to a proforma invoice once, items and all", async () => {
+		const company = await db.company.create({
+			data: { name: "Conversion Company", domain: conversionDomain },
+			select: { id: true },
+		});
+		const deal = await db.deal.create({
+			data: {
+				name: "Conversion Inquiry",
+				companyId: company.id,
+				ownerId: userA,
+			},
+			select: { id: true },
+		});
+		const quotation = await deals.createQuotation(
+			{
+				dealId: deal.id,
+				items: [
+					{
+						productName: "Tumbler",
+						specification: "500ml",
+						quantity: 500,
+						unitPriceCents: 120,
+					},
+					{ productName: "Decanter", quantity: 100, unitPriceCents: 480 },
+				],
+			},
+			userA,
+		);
+
+		const first = await deals.convertQuotationToOrder(quotation.id, userA);
+		expect(first.created).toBe(true);
+
+		const order = await db.salesOrder.findUniqueOrThrow({
+			where: { id: first.id },
+			include: { items: true },
+		});
+		expect(order.dealId).toBe(deal.id);
+		expect(order.quotationId).toBe(quotation.id);
+		expect(order.items).toHaveLength(2);
+		expect(Number(order.totalAmount)).toBe(1080);
+
+		const storedDeal = await db.deal.findUniqueOrThrow({
+			where: { id: deal.id },
+		});
+		expect(storedDeal.stage).toBe("PROFORMA_INVOICE");
+
+		const stageChange = await db.activity.findFirst({
+			where: { dealId: deal.id, type: ActivityType.STAGE_CHANGE },
+		});
+		expect(stageChange?.createdById).toBe(userA);
+
+		const again = await deals.convertQuotationToOrder(quotation.id, userA);
+		expect(again).toMatchObject({ id: first.id, created: false });
+		expect(await db.salesOrder.count({ where: { dealId: deal.id } })).toBe(1);
 	});
 });
 
