@@ -37,17 +37,12 @@ export class SyncController {
 	}
 
 	private async google(authorization?: string) {
-		if (!this.secret) {
-			this.logger.error({
-				message: "CRON_SECRET is not set — refusing to run the sync route.",
-			});
-			throw new ServiceUnavailableException("Sync is not configured.");
-		}
-
-		if (!timingSafeEquals(authorization ?? "", `Bearer ${this.secret}`)) {
-			throw new ForbiddenException();
-		}
-
+		assertCronAuthorized(
+			authorization,
+			this.secret,
+			this.logger,
+			"google sync",
+		);
 		return this.sync.runDue();
 	}
 }
@@ -61,4 +56,22 @@ function timingSafeEquals(a: string, b: string): boolean {
 	}
 
 	return mismatch === 0;
+}
+
+export function assertCronAuthorized(
+	authorization: string | undefined,
+	secret: string | undefined,
+	logger: Logger,
+	route: string,
+): void {
+	if (!secret) {
+		logger.error({
+			message: `CRON_SECRET is not set — refusing to run ${route}.`,
+		});
+		throw new ServiceUnavailableException("Cron route is not configured.");
+	}
+
+	if (!timingSafeEquals(authorization ?? "", `Bearer ${secret}`)) {
+		throw new ForbiddenException();
+	}
 }

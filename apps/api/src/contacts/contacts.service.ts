@@ -17,6 +17,11 @@ import { AgentQueueService } from "../agent/agent-queue.service";
 import { AgentTriggerService } from "../agent/agent-trigger.service";
 import { CompanyDirectoryService } from "../companies/company-directory.service";
 import {
+	assertCompanyAccess,
+	assertContactAccess,
+	resolveOwnerId,
+} from "../crm/access";
+import {
 	ActivityStampService,
 	type StampTargets,
 } from "../crm/activity-stamp.service";
@@ -259,8 +264,15 @@ export class ContactsService {
 		};
 	}
 
-	async create(input: ContactCreateInput) {
+	async create(input: ContactCreateInput, actingUserId?: string) {
 		const email = normalizeEmail(input.email ?? "");
+		const ownerId = actingUserId
+			? await resolveOwnerId(this.db, actingUserId, input.ownerId)
+			: (input.ownerId ?? null);
+
+		if (actingUserId && input.companyId) {
+			await assertCompanyAccess(this.db, actingUserId, input.companyId);
+		}
 
 		if (email) {
 			const existing = await this.db.contact.findFirst({
@@ -278,26 +290,35 @@ export class ContactsService {
 			input.companyId ??
 			(email
 				? await this.companies.companyForEmail(email, {
-						ownerId: input.ownerId,
+						ownerId,
 					})
 				: null);
 
-		const contact = await this.db.$transaction(async (tx) => {
-			await this.allowAgain(tx, email);
+		if (actingUserId && companyId) {
+			await assertCompanyAccess(this.db, actingUserId, companyId);
+		}
 
-			return tx.contact.create({
-				data: {
-					firstName: input.firstName.trim(),
-					lastName: blankToNull(input.lastName ?? ""),
-					email,
-					phone: blankToNull(input.phone ?? ""),
-					title: blankToNull(input.title ?? ""),
-					companyId,
-					ownerId: input.ownerId ?? null,
-				},
-				select: { id: true, firstName: true, lastName: true },
+		let contact: { id: string; firstName: string; lastName: string | null };
+		try {
+			contact = await this.db.$transaction(async (tx) => {
+				await this.allowAgain(tx, email);
+
+				return tx.contact.create({
+					data: {
+						firstName: input.firstName.trim(),
+						lastName: blankToNull(input.lastName ?? ""),
+						email,
+						phone: blankToNull(input.phone ?? ""),
+						title: blankToNull(input.title ?? ""),
+						companyId,
+						ownerId,
+					},
+					select: { id: true, firstName: true, lastName: true },
+				});
 			});
-		});
+		} catch (error) {
+			throw this.translate(error, "new");
+		}
 
 		this.logger.log({ message: "Contact created", contactId: contact.id });
 
@@ -309,7 +330,11 @@ export class ContactsService {
 		return contact;
 	}
 
-	async delete(id: string): Promise<{ id: string; name: string }> {
+	async delete(
+		id: string,
+		actingUserId?: string,
+	): Promise<{ id: string; name: string }> {
+		if (actingUserId) await assertContactAccess(this.db, actingUserId, id);
 		let deleted: {
 			targets: StampTargets;
 			name: string;
@@ -361,7 +386,13 @@ export class ContactsService {
 		return { id, name: deleted.name };
 	}
 
-	async update(id: string, input: ContactUpdateInput) {
+	async update(id: string, input: ContactUpdateInput, actingUserId?: string) {
+		if (actingUserId) {
+			await assertContactAccess(this.db, actingUserId, id);
+			if (input.companyId) {
+				await assertCompanyAccess(this.db, actingUserId, input.companyId);
+			}
+		}
 		const data: Prisma.ContactUpdateInput = {};
 
 		if (input.firstName !== undefined) data.firstName = input.firstName.trim();
@@ -385,8 +416,11 @@ export class ContactsService {
 				: { disconnect: true };
 		}
 		if (input.ownerId !== undefined) {
-			data.owner = input.ownerId
-				? { connect: { id: input.ownerId } }
+			const ownerId = actingUserId
+				? await resolveOwnerId(this.db, actingUserId, input.ownerId)
+				: input.ownerId;
+			data.owner = ownerId
+				? { connect: { id: ownerId } }
 				: { disconnect: true };
 		}
 
@@ -483,7 +517,11 @@ export class ContactsService {
 		};
 	}
 
-	async enrich(id: string): Promise<{ id: string; queued: true }> {
+	async enrich(
+		id: string,
+		actingUserId?: string,
+	): Promise<{ id: string; queued: true }> {
+		if (actingUserId) await assertContactAccess(this.db, actingUserId, id);
 		const contact = await this.db.contact.findUnique({
 			where: { id },
 			select: { id: true, imageUrl: true, linkedinUrl: true },
@@ -526,6 +564,8 @@ export class ContactsService {
 		if (!fact) {
 			throw new NotFoundException(`No fact with id ${input.factId}.`);
 		}
+
+		await assertContactAccess(this.db, userId, fact.contactId);
 
 		if (fact.status !== FactStatus.PROPOSED) {
 			throw new ConflictException("That suggestion has already been settled.");

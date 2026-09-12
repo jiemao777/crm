@@ -27,8 +27,8 @@ export interface ConversationSummary {
 
 const LIST_TTL_MS = 10 * 60_000;
 
-const listKey = (userId: string, recordId: string) =>
-	`agent:conversations:${userId}:${recordId}`;
+const listKey = (userId: string, recordId: string | null) =>
+	`agent:conversations:${userId}:${recordId ?? "global"}`;
 
 @Injectable()
 export class ConversationsService {
@@ -54,9 +54,13 @@ export class ConversationsService {
 		const rows = await this.db.agentConversation.findMany({
 			where: {
 				userId,
-				...(input.contactId ? { contactId: input.contactId } : {}),
-				...(input.companyId ? { companyId: input.companyId } : {}),
-				...(input.dealId ? { dealId: input.dealId } : {}),
+				...(recordId === null
+					? { contactId: null, companyId: null, dealId: null }
+					: {
+							...(input.contactId ? { contactId: input.contactId } : {}),
+							...(input.companyId ? { companyId: input.companyId } : {}),
+							...(input.dealId ? { dealId: input.dealId } : {}),
+						}),
 			},
 			orderBy: { lastMessageAt: "desc" },
 			take: 20,
@@ -187,15 +191,7 @@ export class ConversationsService {
 		contactId?: string;
 		companyId?: string;
 		dealId?: string;
-	}): string {
-		const recordId = input.contactId ?? input.companyId ?? input.dealId;
-
-		if (!recordId) {
-			throw new BadRequestException(
-				"A conversation belongs to a contact, a company or a deal.",
-			);
-		}
-
-		return recordId;
+	}): string | null {
+		return input.contactId ?? input.companyId ?? input.dealId ?? null;
 	}
 }

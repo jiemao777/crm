@@ -37,23 +37,29 @@ export class ContactsRouter {
 	}
 
 	@Mutation({ input: contactCreateInput })
-	async create(@Input() input: z.infer<typeof contactCreateInput>) {
-		return this.contacts.create(input);
+	async create(
+		@Ctx() ctx: AuthedTrpcContext,
+		@Input() input: z.infer<typeof contactCreateInput>,
+	) {
+		return this.contacts.create(input, ctx.user.id);
 	}
 
 	@Mutation({ input: contactUpdateArgs })
-	async update(@Input() input: z.infer<typeof contactUpdateArgs>) {
-		return this.contacts.update(input.id, input.data);
+	async update(
+		@Ctx() ctx: AuthedTrpcContext,
+		@Input() input: z.infer<typeof contactUpdateArgs>,
+	) {
+		return this.contacts.update(input.id, input.data, ctx.user.id);
 	}
 
 	@Mutation({ input: contactIdInput })
-	async delete(@Input("id") id: string) {
-		return this.contacts.delete(id);
+	async delete(@Ctx() ctx: AuthedTrpcContext, @Input("id") id: string) {
+		return this.contacts.delete(id, ctx.user.id);
 	}
 
 	@Mutation({ input: contactIdInput })
-	async enrich(@Input("id") id: string) {
-		return this.contacts.enrich(id);
+	async enrich(@Ctx() ctx: AuthedTrpcContext, @Input("id") id: string) {
+		return this.contacts.enrich(id, ctx.user.id);
 	}
 
 	@Mutation({ input: factDecisionInput })

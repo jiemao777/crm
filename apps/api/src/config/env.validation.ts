@@ -87,6 +87,14 @@ export class EnvironmentVariables {
 
 	@IsOptional()
 	@IsString()
+	CREDENTIALS_ENCRYPTION_KEY?: string;
+
+	@IsOptional()
+	@IsString()
+	MAIL_CREDENTIALS_ENCRYPTION_KEY?: string;
+
+	@IsOptional()
+	@IsString()
 	BLOB_READ_WRITE_TOKEN?: string;
 
 	@IsOptional()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
-import { setResearchKeyInput } from "../src/settings/settings.contracts";
+import { setResearchProviderInput } from "../src/settings/settings.contracts";
 import { readableInputError } from "../src/trpc/error-formatter";
 
 const causeOf = (schema: z.ZodType, value: unknown) => {
@@ -11,15 +11,21 @@ const causeOf = (schema: z.ZodType, value: unknown) => {
 
 describe("what a rejected form says", () => {
 	it("shows the sentence, not the ZodError", () => {
-		const cause = causeOf(setResearchKeyInput, { apiKey: "short" });
+		const cause = causeOf(setResearchProviderInput, {
+			kind: "context",
+			apiKey: "short",
+		});
 
 		expect(readableInputError("ignored", cause)).toBe(
-			"That does not look like a Context API key — it is too short.",
+			"That does not look like a research API key — it is too short.",
 		);
 	});
 
 	it("never leaks the machinery a reader cannot act on", () => {
-		const cause = causeOf(setResearchKeyInput, { apiKey: "short" });
+		const cause = causeOf(setResearchProviderInput, {
+			kind: "context",
+			apiKey: "short",
+		});
 		const shown = readableInputError("ignored", cause) ?? "";
 
 		for (const noise of [

@@ -193,6 +193,10 @@ describe("normaliseMessageId", () => {
 			normaliseMessageId("abc@acme.com"),
 		);
 	});
+
+	it("keeps a reference token stable when a mail client adds punctuation", () => {
+		expect(normaliseMessageId("<root@acme.com>,")).toBe("root@acme.com");
+	});
 });
 
 describe("snippetOf", () => {

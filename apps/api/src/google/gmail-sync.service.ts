@@ -1,16 +1,16 @@
 import {
-	ActivityType,
 	type Db,
 	EmailDirection,
 	GoogleSyncStatus,
 	type MailboxSyncModel as MailboxSync,
-	RecordSource,
 } from "@crm/db";
 import { Injectable, Logger } from "@nestjs/common";
-import { ActivityStampService } from "../crm/activity-stamp.service";
 import { InjectDatabase } from "../database/database.constants";
+import {
+	MailIngestionService,
+	type NormalizedMailMessage,
+} from "../mail/mail-ingestion.service";
 import { GmailClient, type GmailMessage } from "./gmail.client";
-import { GoogleMatchService, type MatchContext } from "./google-match.service";
 import { GoogleTokenService } from "./google-token.service";
 import {
 	type GmailHeader,
@@ -18,14 +18,9 @@ import {
 	normaliseMessageId,
 	plainTextBody,
 	rootMessageId,
-	snippetOf,
 	stripQuotedHistory,
 } from "./mime";
-import {
-	type Participant,
-	parseAddress,
-	parseAddressList,
-} from "./participants";
+import { parseAddress, parseAddressList } from "./participants";
 import { SyncStateService } from "./sync-state.service";
 
 const MAX_MESSAGES_PER_TICK = 120;
@@ -39,17 +34,6 @@ export type GmailSyncOutcome = {
 	reason?: string;
 };
 
-type ParsedMessage = {
-	rfcMessageId: string;
-	rootId: string;
-	subject: string | null;
-	from: Participant;
-	recipients: { email: string; name: string | null; kind: "to" | "cc" }[];
-	body: string;
-	sentAt: Date;
-	gmailMessageId: string | null;
-};
-
 @Injectable()
 export class GmailSyncService {
 	private readonly logger = new Logger(GmailSyncService.name);
@@ -58,9 +42,8 @@ export class GmailSyncService {
 		@InjectDatabase() private readonly db: Db,
 		private readonly gmail: GmailClient,
 		private readonly tokens: GoogleTokenService,
-		private readonly match: GoogleMatchService,
 		private readonly state: SyncStateService,
-		private readonly stamp: ActivityStampService,
+		private readonly ingestion: MailIngestionService,
 	) {}
 
 	async sync(row: MailboxSync): Promise<GmailSyncOutcome> {
@@ -211,8 +194,18 @@ export class GmailSyncService {
 
 		const alreadyHave = await this.db.emailMessage.findMany({
 			where: { gmailMessageId: { in: [...ids] } },
-			select: { gmailMessageId: true },
+			select: { id: true, gmailMessageId: true },
 		});
+		if (alreadyHave.length > 0) {
+			await this.db.emailMessageSync.createMany({
+				data: alreadyHave.map((message) => ({
+					messageId: message.id,
+					userId: row.userId,
+					source: "gmail",
+				})),
+				skipDuplicates: true,
+			});
+		}
 		const seen = new Set(
 			alreadyHave.map((existing) => existing.gmailMessageId),
 		);
@@ -223,196 +216,31 @@ export class GmailSyncService {
 
 		if (batch.length === 0) return { written: 0, remaining };
 
-		const [internal, suppressedDomains, suppressedEmails] = await Promise.all([
-			this.match.internalIdentity(),
-			this.match.suppressedDomains(),
-			this.match.suppressedEmails(),
-		]);
-
-		const context = {
-			ourAddresses: internal.addresses,
-			ourDomains: internal.domains,
-			suppressedDomains,
-			suppressedEmails,
-		};
-
+		const session = await this.ingestion.forMailbox({
+			source: "gmail",
+			userId: row.userId,
+			mailboxAddress: mailbox,
+			autoCreate: row.autoCreate,
+		});
 		let written = 0;
 
 		for (const id of batch) {
 			const message = await this.gmail.getMessage(accessToken, id);
 			if (message.outcome !== "ok") continue;
 
-			const stored = await this.store(row, mailbox, message.data, context);
-			if (stored) written += 1;
+			const parsed = this.parse(message.data, mailbox);
+			if (!parsed) continue;
+			const stored = await session.ingest(parsed);
+			if (stored.status === "written") written += 1;
 		}
 
 		return { written, remaining };
 	}
 
-	private async store(
-		row: MailboxSync,
-		mailbox: string,
+	private parse(
 		message: GmailMessage,
-		context: MatchContext,
-	): Promise<boolean> {
-		const parsed = this.parse(message);
-		if (!parsed) return false;
-
-		const existing = await this.db.emailMessage.findUnique({
-			where: { rfcMessageId: parsed.rfcMessageId },
-			select: { id: true },
-		});
-		if (existing) return false;
-
-		const participants = [parsed.from, ...parsed.recipients];
-		const outbound = parsed.from.email === mailbox;
-
-		const thread = await this.db.emailThread.findUnique({
-			where: { rootMessageId: parsed.rootId },
-			select: { id: true, companyId: true, contactId: true },
-		});
-
-		let companyId = thread?.companyId ?? null;
-		let contactId = thread?.contactId ?? null;
-
-		if (!thread) {
-			const repliedTo =
-				outbound || (await this.hasOutboundInThread(parsed.rootId, mailbox));
-
-			const match = await this.match.resolve(
-				{
-					participants,
-					allowCreate: row.autoCreate && repliedTo,
-					source: RecordSource.EMAIL,
-					ownerId: row.userId,
-				},
-				context,
-			);
-
-			companyId = match.companyId;
-			contactId = match.contactId;
-
-			if (!companyId && !contactId) {
-				return false;
-			}
-		}
-
-		const record = await this.db.emailThread.upsert({
-			where: { rootMessageId: parsed.rootId },
-			create: {
-				rootMessageId: parsed.rootId,
-				subject: parsed.subject,
-				companyId,
-				contactId,
-				firstMessageAt: parsed.sentAt,
-				lastMessageAt: parsed.sentAt,
-				messageCount: 0,
-			},
-			update: {},
-			select: { id: true, firstMessageAt: true, lastMessageAt: true },
-		});
-
-		await this.db.emailMessage.create({
-			data: {
-				threadId: record.id,
-				rfcMessageId: parsed.rfcMessageId,
-				syncedByUserId: row.userId,
-				gmailMessageId: parsed.gmailMessageId,
-				direction: outbound ? EmailDirection.OUTBOUND : EmailDirection.INBOUND,
-				fromEmail: parsed.from.email,
-				fromName: parsed.from.name,
-				recipients: parsed.recipients,
-				subject: parsed.subject,
-				snippet: snippetOf(parsed.body),
-				body: parsed.body || null,
-				sentAt: parsed.sentAt,
-			},
-		});
-
-		const stats = await this.db.emailMessage.aggregate({
-			where: { threadId: record.id },
-			_count: { _all: true },
-			_min: { sentAt: true },
-			_max: { sentAt: true },
-		});
-
-		const firstMessageAt = stats._min.sentAt ?? parsed.sentAt;
-		const lastMessageAt = stats._max.sentAt ?? parsed.sentAt;
-
-		await this.db.emailThread.update({
-			where: { id: record.id },
-			data: {
-				messageCount: stats._count._all,
-				firstMessageAt,
-				lastMessageAt,
-				...(parsed.sentAt <= firstMessageAt ? { subject: parsed.subject } : {}),
-			},
-		});
-
-		await this.project(record.id, row.userId, {
-			subject: parsed.subject ?? "(no subject)",
-			snippet: snippetOf(parsed.body),
-			lastMessageAt,
-			companyId,
-			contactId,
-		});
-
-		return true;
-	}
-
-	private async hasOutboundInThread(
-		rootMessageId: string,
 		mailbox: string,
-	): Promise<boolean> {
-		const found = await this.db.emailMessage.findFirst({
-			where: {
-				thread: { rootMessageId },
-				fromEmail: mailbox,
-			},
-			select: { id: true },
-		});
-
-		return found !== null;
-	}
-
-	private async project(
-		emailThreadId: string,
-		userId: string,
-		summary: {
-			subject: string;
-			snippet: string | null;
-			lastMessageAt: Date;
-			companyId: string | null;
-			contactId: string | null;
-		},
-	): Promise<void> {
-		const activity = await this.db.activity.upsert({
-			where: { emailThreadId },
-			create: {
-				type: ActivityType.EMAIL,
-				subject: summary.subject,
-				body: summary.snippet,
-				occurredAt: summary.lastMessageAt,
-				companyId: summary.companyId,
-				contactId: summary.contactId,
-				createdById: userId,
-				emailThreadId,
-				meta: { synced: true, source: "gmail" },
-			},
-			update: {
-				body: summary.snippet,
-				occurredAt: summary.lastMessageAt,
-			},
-			select: { createdAt: true },
-		});
-
-		await this.stamp.touch(
-			{ companyId: summary.companyId, contactId: summary.contactId },
-			activity.createdAt,
-		);
-	}
-
-	private parse(message: GmailMessage): ParsedMessage | null {
+	): NormalizedMailMessage | null {
 		const headers = message.payload?.headers;
 
 		const rawMessageId = header(headers, "message-id");
@@ -442,13 +270,22 @@ export class GmailSyncService {
 
 		return {
 			rfcMessageId: normaliseMessageId(rawMessageId),
-			rootId,
+			rootMessageId: rootId,
 			subject: header(headers, "subject"),
 			from,
 			recipients: [...to, ...cc],
 			body,
+			bodyHtml: null,
 			sentAt,
-			gmailMessageId: message.id ?? null,
+			direction:
+				from.email === mailbox
+					? EmailDirection.OUTBOUND
+					: EmailDirection.INBOUND,
+			providerMessageId: message.id ?? null,
+			folderId: null,
+			isRead: !(message.labelIds ?? []).includes("UNREAD"),
+			starred: (message.labelIds ?? []).includes("STARRED"),
+			attachments: [],
 		};
 	}
 

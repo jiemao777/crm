@@ -56,11 +56,15 @@ describe("Auth (e2e)", () => {
 	});
 
 	it("lets the sign-in page read what it may offer", async () => {
+		const { isGoogleConfigured } = await import("@crm/auth");
 		const response = await request(app.getHttpServer())
 			.get("/api/trpc/sso.signInOptions")
 			.expect(200);
 
-		expect(response.body.result.data).toEqual({ google: true, providers: [] });
+		expect(response.body.result.data).toEqual({
+			google: isGoogleConfigured(),
+			providers: [],
+		});
 	});
 
 	it("keeps the SSO configuration itself behind the session", async () => {

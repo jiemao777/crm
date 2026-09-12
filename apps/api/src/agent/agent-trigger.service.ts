@@ -80,6 +80,22 @@ export class AgentTriggerService {
 		});
 	}
 
+	async mailReceived(input: {
+		threadId: string;
+		userId: string;
+		allowCreate: boolean;
+	}): Promise<void> {
+		await this.enqueue({
+			emailThreadId: input.threadId,
+			userId: input.userId,
+			allowCreate: input.allowCreate,
+			kind: "mail-intake",
+			reason: "An unlinked email thread needs classification and filing",
+			priority: PRIORITY.mail,
+			budget: 2,
+		});
+	}
+
 	async backfill(input: {
 		kind: string;
 		reason: string;
@@ -146,6 +162,9 @@ export class AgentTriggerService {
 	private async enqueue(task: {
 		contactId?: string;
 		companyId?: string;
+		emailThreadId?: string;
+		userId?: string;
+		allowCreate?: boolean;
 		kind: string;
 		reason: string;
 		priority: number;
@@ -158,6 +177,7 @@ export class AgentTriggerService {
 					finishedAt: null,
 					...(task.contactId ? { contactId: task.contactId } : {}),
 					...(task.companyId ? { companyId: task.companyId } : {}),
+					...(task.emailThreadId ? { emailThreadId: task.emailThreadId } : {}),
 				},
 				select: { id: true },
 			});
@@ -168,6 +188,9 @@ export class AgentTriggerService {
 				data: {
 					contactId: task.contactId ?? null,
 					companyId: task.companyId ?? null,
+					emailThreadId: task.emailThreadId ?? null,
+					userId: task.userId ?? null,
+					allowCreate: task.allowCreate ?? false,
 					kind: task.kind,
 					reason: task.reason,
 					priority: task.priority,
@@ -181,6 +204,7 @@ export class AgentTriggerService {
 				kind: task.kind,
 				contactId: task.contactId,
 				companyId: task.companyId,
+				emailThreadId: task.emailThreadId,
 			});
 
 			this.poke();

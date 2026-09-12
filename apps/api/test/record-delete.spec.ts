@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { db, RecordSource } from "@crm/db";
 import { AgentQueueService } from "../src/agent/agent-queue.service";
 import { AgentTriggerService } from "../src/agent/agent-trigger.service";
+import { AiExtractService } from "../src/agent/ai-extract.service";
 import { CompaniesService } from "../src/companies/companies.service";
 import { CompanyDirectoryService } from "../src/companies/company-directory.service";
 import { FaviconService } from "../src/companies/favicon.service";
@@ -16,6 +17,7 @@ const doomedDomain = `doomed-${suffix}.test`;
 const stampDomain = `stamped-${suffix}.test`;
 const orphanDomain = `orphaned-${suffix}.test`;
 const email = `gone@${domain}`;
+const personalEmail = `personal-${suffix}@gmail.com`;
 const colleague = `stays@${domain}`;
 const userId = `user-${suffix}`;
 
@@ -38,6 +40,7 @@ const companies = new CompaniesService(
 	queue,
 	{ backfill: async () => undefined } as unknown as FaviconService,
 	stamp,
+	{ extract: async () => null } as unknown as AiExtractService,
 );
 const match = new GoogleMatchService(db, directory, agent, log);
 
@@ -90,7 +93,9 @@ async function clean() {
 		},
 	});
 	await db.agentEvent.deleteMany({ where: { contactId: { in: contactIds } } });
-	await db.contact.deleteMany({ where: ours });
+	await db.contact.deleteMany({
+		where: { OR: [ours, { email: personalEmail }] },
+	});
 	await db.company.deleteMany({ where: { domain: { in: domains } } });
 	await db.suppressedContact.deleteMany({ where: ours });
 	await db.user.deleteMany({ where: { id: userId } });
@@ -227,6 +232,43 @@ describe("deleting a contact", () => {
 		expect(
 			await db.contact.findFirst({ where: { email: asSynced } }),
 		).toBeNull();
+	});
+});
+
+describe("matching mailbox conversations", () => {
+	it("treats a connected Zoho mailbox as internal and matches a saved personal address", async () => {
+		const mailboxEmail = `sales@${domain}`;
+		const contact = await db.contact.create({
+			data: {
+				firstName: "Personal",
+				email: personalEmail,
+				ownerId: userId,
+			},
+			select: { id: true },
+		});
+		await db.zohoMailbox.create({
+			data: {
+				userId,
+				email: mailboxEmail,
+				encryptedPassword: "test",
+			},
+		});
+
+		const result = await match.resolve(
+			{
+				participants: [
+					{ email: mailboxEmail, name: "Sales" },
+					{ email: personalEmail, name: "Personal" },
+				],
+				allowCreate: false,
+				source: RecordSource.EMAIL,
+				ownerId: userId,
+			},
+			await matchContext(),
+		);
+
+		expect(result.contactId).toBe(contact.id);
+		expect(result.external).toEqual([]);
 	});
 });
 

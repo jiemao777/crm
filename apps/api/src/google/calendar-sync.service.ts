@@ -206,13 +206,24 @@ export class CalendarSyncService {
 		};
 
 		if (event.status === "cancelled") {
-			const deleted = await this.db.calendarEvent.deleteMany({
-				where: {
-					iCalUid,
-					originalStartTime: originalStart.at,
-				},
+			const existing = await this.db.calendarEvent.findUnique({
+				where: key,
+				select: { id: true },
 			});
-			return deleted.count > 0 ? "removed" : "ignored";
+			if (!existing) return "ignored";
+
+			await this.db.calendarEventSync.deleteMany({
+				where: { eventId: existing.id, userId: row.userId },
+			});
+			const remaining = await this.db.calendarEventSync.count({
+				where: { eventId: existing.id },
+			});
+			if (remaining > 0) return "ignored";
+
+			const deleted = await this.db.calendarEvent.delete({
+				where: { id: existing.id },
+			});
+			return deleted ? "removed" : "ignored";
 		}
 
 		const end = eventTime(event.end);
@@ -274,6 +285,11 @@ export class CalendarSyncService {
 				contactId: match.contactId,
 			},
 			select: { id: true },
+		});
+
+		await this.db.calendarEventSync.createMany({
+			data: { eventId: record.id, userId: row.userId },
+			skipDuplicates: true,
 		});
 
 		await this.syncAttendees(record.id, event);

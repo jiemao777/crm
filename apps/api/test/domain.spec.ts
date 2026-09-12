@@ -3,6 +3,7 @@ import {
 	domainFromEmail,
 	isMachineDomain,
 	normalizeDomain,
+	rootDomain,
 } from "../src/companies/domain";
 
 describe("normalizeDomain", () => {
@@ -32,6 +33,15 @@ describe("normalizeDomain", () => {
 		}
 		expect(normalizeDomain(null)).toBeNull();
 		expect(normalizeDomain(undefined)).toBeNull();
+	});
+});
+
+describe("rootDomain", () => {
+	it("strips subdomains down to the registrable host", () => {
+		expect(rootDomain("mail.ingcho.com")).toBe("ingcho.com");
+		expect(rootDomain("www.ingcho.com")).toBe("ingcho.com");
+		expect(rootDomain("ingcho.com")).toBe("ingcho.com");
+		expect(rootDomain("www.acme.co.uk")).toBe("acme.co.uk");
 	});
 });
 

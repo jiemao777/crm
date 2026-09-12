@@ -122,10 +122,27 @@ describe("ConversationsService", () => {
 		expect(await service.list({ contactId }, "somebody-else")).toEqual([]);
 	});
 
-	it("refuses a conversation that belongs to a record of neither kind", async () => {
+	it("keeps a global conversation separate from record conversations", async () => {
+		await service.save(
+			{
+				sessionId: `ses_${suffix}_3`,
+				title: "What changed today?",
+				messageCount: 1,
+			},
+			userId,
+		);
+
+		expect(await service.list({}, userId)).toEqual([
+			expect.objectContaining({
+				sessionId: `ses_${suffix}_3`,
+				title: "What changed today?",
+			}),
+		]);
 		expect(
-			service.save({ sessionId: `ses_${suffix}_3` }, userId),
-		).rejects.toThrow();
+			(await service.list({ contactId }, userId)).map(
+				(conversation) => conversation.sessionId,
+			),
+		).not.toContain(`ses_${suffix}_3`);
 	});
 
 	it("forgets a conversation and the events behind it", async () => {

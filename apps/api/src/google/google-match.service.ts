@@ -9,6 +9,7 @@ import {
 	dominantDomain,
 	externalParticipants,
 	isDerivedName,
+	isMachineAddress,
 	type Participant,
 	splitName,
 	workDomain,
@@ -53,13 +54,16 @@ export class GoogleMatchService {
 		addresses: Set<string>;
 		domains: Set<string>;
 	}> {
-		const users = await this.db.user.findMany({ select: { email: true } });
+		const [users, mailboxes] = await Promise.all([
+			this.db.user.findMany({ select: { email: true } }),
+			this.db.zohoMailbox.findMany({ select: { email: true } }),
+		]);
 
 		const addresses = new Set<string>();
 		const domains = new Set<string>(workspaceDomains());
 
-		for (const user of users) {
-			const email = user.email.toLowerCase();
+		for (const entry of [...users, ...mailboxes]) {
+			const email = entry.email.trim().toLowerCase();
 			addresses.add(email);
 
 			const domain = workDomain(email);
@@ -93,6 +97,36 @@ export class GoogleMatchService {
 			suppressedDomains: context.suppressedDomains,
 			suppressedEmails: context.suppressedEmails,
 		});
+		const contactEmails = [
+			...new Set(
+				request.participants
+					.map((participant) => participant.email.trim().toLowerCase())
+					.filter((email) => this.canMatchKnownContact(email, context)),
+			),
+		];
+		if (contactEmails.length > 0) {
+			const contacts = await this.db.contact.findMany({
+				where: { email: { in: contactEmails, mode: "insensitive" } },
+				select: { id: true, email: true, companyId: true },
+			});
+			const byEmail = new Map(
+				contacts.flatMap((contact) =>
+					contact.email
+						? [[contact.email.toLowerCase(), contact] as const]
+						: [],
+				),
+			);
+			const contact = contactEmails
+				.map((email) => byEmail.get(email))
+				.find((entry) => entry !== undefined);
+			if (contact) {
+				return {
+					companyId: contact.companyId,
+					contactId: contact.id,
+					external,
+				};
+			}
+		}
 
 		if (external.length === 0) {
 			return { companyId: null, contactId: null, external };
@@ -149,6 +183,20 @@ export class GoogleMatchService {
 		}
 
 		return this.create(external, domain, request);
+	}
+
+	private canMatchKnownContact(email: string, context: MatchContext): boolean {
+		if (!email || context.ourAddresses.has(email)) return false;
+		if (context.suppressedEmails.has(email) || isMachineAddress(email)) {
+			return false;
+		}
+
+		const domain = workDomain(email);
+		return (
+			domain === null ||
+			(!context.ourDomains.has(domain) &&
+				!context.suppressedDomains.has(domain))
+		);
 	}
 
 	private async create(

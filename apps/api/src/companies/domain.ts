@@ -32,6 +32,29 @@ export function domainFromEmail(
 		: domain;
 }
 
+const SECOND_LEVEL_TLDS = new Set([
+	"ac",
+	"co",
+	"com",
+	"edu",
+	"gov",
+	"net",
+	"org",
+]);
+
+export function rootDomain(input: string | null | undefined): string | null {
+	const domain = normalizeDomain(input);
+	if (!domain) return null;
+	const labels = domain.split(".");
+	if (labels.length <= 2) return domain;
+	const tld = labels[labels.length - 1] ?? "";
+	const second = labels[labels.length - 2] ?? "";
+	if (tld.length === 2 && SECOND_LEVEL_TLDS.has(second)) {
+		return labels.slice(-3).join(".");
+	}
+	return labels.slice(-2).join(".");
+}
+
 export function isMachineDomain(input: string | null | undefined): boolean {
 	const domain = normalizeDomain(input);
 	if (!domain) return false;

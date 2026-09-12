@@ -14,13 +14,13 @@ import { z } from "zod";
 const t = initTRPC.create();
 const publicProcedure = t.procedure;
 import { timelineInput, timelineCountsInput, myTasksInput, activityCreateInput, completeInput } from "../activities/activities.contracts";
-import { companyListInput, companyIdInput, companyOptionsInput, companyCreateInput, companyUpdateArgs, setPrimaryContactInput } from "../companies/companies.contracts";
+import { companyListInput, companyIdInput, companyOptionsInput, aiExtractInput, companyCreateInput, companyUpdateArgs, companyMergeInput, setPrimaryContactInput } from "../companies/companies.contracts";
 import { contactListInput, contactIdInput, contactCreateInput, contactUpdateArgs, factDecisionInput } from "../contacts/contacts.contracts";
 import { conversationListInput, conversationEventsInput, conversationSaveInput, conversationIdInput } from "../conversations/conversations.contracts";
 import { dashboardSummaryInput } from "../dashboard/dashboard.contracts";
-import { dealListInput, dealIdInput, dealCreateInput, dealUpdateArgs, setStageInput } from "../deals/deals.contracts";
-import { setAutoCreateInput, suppressDomainInput, threadInput, calendarEventInput } from "../google/google.contracts";
-import { setAgentModelInput, setResearchKeyInput } from "../settings/settings.contracts";
+import { dealListInput, dealIdInput, dealCreateInput, dealUpdateArgs, setStageInput, quotationCreateInput, quotationUpdateArgs, setQuotationStatusInput, quotationIdInput, sampleCreateInput, sampleUpdateArgs, sampleIdInput, orderCreateInput, orderUpdateArgs, orderIdInput, paymentCreateInput, paymentUpdateArgs, paymentIdInput } from "../deals/deals.contracts";
+import { setAutoCreateInput, zohoConnectInput, sendZohoMailInput, draftInput, saveDraftInput, draftAttachmentInput, draftAttachmentDeleteInput, sendDraftInput, recipientSuggestionInput, suppressDomainInput, threadInput, attachmentInput, threadListInput, threadStateInput, manualLeadInput, markThreadReadInput, bulkThreadStateInput, calendarEventInput } from "../google/google.contracts";
+import { agentProviderInput, activateAgentProviderInput, deleteAgentProviderInput, setResearchProviderInput } from "../settings/settings.contracts";
 import { ssoProviderListInput, registerSsoProviderInput, deleteSsoProviderInput } from "../sso/sso.contracts";
 import { memberListInput, updateWorkspaceInput, setMemberRoleInput } from "../workspace/workspace.contracts";
 import type { ActivitiesRouter } from "../activities/activities.router";
@@ -64,6 +64,9 @@ const appRouter = t.router({
     options: publicProcedure
       .input(companyOptionsInput)
       .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<CompaniesRouter["options"]>>),
+    aiExtract: publicProcedure
+      .input(aiExtractInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<CompaniesRouter["aiExtract"]>>),
     create: publicProcedure
       .input(companyCreateInput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<CompaniesRouter["create"]>>),
@@ -73,6 +76,11 @@ const appRouter = t.router({
     delete: publicProcedure
       .input(companyIdInput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<CompaniesRouter["delete"]>>),
+    duplicates: publicProcedure
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<CompaniesRouter["duplicates"]>>),
+    merge: publicProcedure
+      .input(companyMergeInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<CompaniesRouter["merge"]>>),
     enrich: publicProcedure
       .input(companyIdInput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<CompaniesRouter["enrich"]>>),
@@ -143,7 +151,55 @@ const appRouter = t.router({
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["delete"]>>),
     setStage: publicProcedure
       .input(setStageInput)
-      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["setStage"]>>)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["setStage"]>>),
+    createQuotation: publicProcedure
+      .input(quotationCreateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["createQuotation"]>>),
+    updateQuotation: publicProcedure
+      .input(quotationUpdateArgs)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["updateQuotation"]>>),
+    setQuotationStatus: publicProcedure
+      .input(setQuotationStatusInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["setQuotationStatus"]>>),
+    deleteQuotation: publicProcedure
+      .input(quotationIdInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["deleteQuotation"]>>),
+    convertQuotationToOrder: publicProcedure
+      .input(quotationIdInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["convertQuotationToOrder"]>>),
+    samples: publicProcedure
+      .input(dealIdInput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["samples"]>>),
+    createSample: publicProcedure
+      .input(sampleCreateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["createSample"]>>),
+    updateSample: publicProcedure
+      .input(sampleUpdateArgs)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["updateSample"]>>),
+    deleteSample: publicProcedure
+      .input(sampleIdInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["deleteSample"]>>),
+    orders: publicProcedure
+      .input(dealIdInput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["orders"]>>),
+    createOrder: publicProcedure
+      .input(orderCreateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["createOrder"]>>),
+    updateOrder: publicProcedure
+      .input(orderUpdateArgs)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["updateOrder"]>>),
+    deleteOrder: publicProcedure
+      .input(orderIdInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["deleteOrder"]>>),
+    createPayment: publicProcedure
+      .input(paymentCreateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["createPayment"]>>),
+    updatePayment: publicProcedure
+      .input(paymentUpdateArgs)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["updatePayment"]>>),
+    deletePayment: publicProcedure
+      .input(paymentIdInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<DealsRouter["deletePayment"]>>)
     }),
   google: t.router({
     status: publicProcedure
@@ -154,15 +210,88 @@ const appRouter = t.router({
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["revokeAccess"]>>),
     syncNow: publicProcedure
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["syncNow"]>>),
+    refreshMail: publicProcedure
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["refreshMail"]>>),
     setAutoCreate: publicProcedure
       .input(setAutoCreateInput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["setAutoCreate"]>>),
+    zohoStatus: publicProcedure
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["zohoStatus"]>>),
+    connectZoho: publicProcedure
+      .input(zohoConnectInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["connectZoho"]>>),
+    disconnectZoho: publicProcedure
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["disconnectZoho"]>>),
+    syncZohoNow: publicProcedure
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["syncZohoNow"]>>),
+    sendZohoMail: publicProcedure
+      .input(sendZohoMailInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["sendZohoMail"]>>),
+    drafts: publicProcedure
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["drafts"]>>),
+    draft: publicProcedure
+      .input(draftInput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["draft"]>>),
+    saveDraft: publicProcedure
+      .input(saveDraftInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["saveDraft"]>>),
+    addDraftAttachment: publicProcedure
+      .input(draftAttachmentInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["addDraftAttachment"]>>),
+    removeDraftAttachment: publicProcedure
+      .input(draftAttachmentDeleteInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["removeDraftAttachment"]>>),
+    deleteDraft: publicProcedure
+      .input(draftInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["deleteDraft"]>>),
+    sendDraft: publicProcedure
+      .input(sendDraftInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["sendDraft"]>>),
+    recipientSuggestions: publicProcedure
+      .input(recipientSuggestionInput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["recipientSuggestions"]>>),
+    backfillZoho: publicProcedure
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["backfillZoho"]>>),
+    setZohoAutoCreate: publicProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["setZohoAutoCreate"]>>),
     suppressDomain: publicProcedure
       .input(suppressDomainInput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["suppressDomain"]>>),
     thread: publicProcedure
       .input(threadInput)
       .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["thread"]>>),
+    attachment: publicProcedure
+      .input(attachmentInput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["attachment"]>>),
+    threads: publicProcedure
+      .input(threadListInput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["threads"]>>),
+    mailCounts: publicProcedure
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["mailCounts"]>>),
+    relinkUnmatched: publicProcedure
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["relinkUnmatched"]>>),
+    createCustomerFromThread: publicProcedure
+      .input(threadStateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["createCustomerFromThread"]>>),
+    createCustomerFromThreadManual: publicProcedure
+      .input(manualLeadInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["createCustomerFromThreadManual"]>>),
+    markThreadRead: publicProcedure
+      .input(markThreadReadInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["markThreadRead"]>>),
+    toggleThreadStar: publicProcedure
+      .input(threadStateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["toggleThreadStar"]>>),
+    trashThread: publicProcedure
+      .input(threadStateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["trashThread"]>>),
+    restoreThread: publicProcedure
+      .input(threadStateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["restoreThread"]>>),
+    bulkThreadState: publicProcedure
+      .input(bulkThreadStateInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["bulkThreadState"]>>),
     event: publicProcedure
       .input(calendarEventInput)
       .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<GoogleRouter["event"]>>)
@@ -173,18 +302,25 @@ const appRouter = t.router({
       .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SearchRouter["quick"]>>)
     }),
   settings: t.router({
-    agentModel: publicProcedure
-      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["agentModel"]>>),
-    modelCatalog: publicProcedure
-      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["modelCatalog"]>>),
-    setAgentModel: publicProcedure
-      .input(setAgentModelInput)
-      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["setAgentModel"]>>),
-    researchKey: publicProcedure
-      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["researchKey"]>>),
-    setResearchKey: publicProcedure
-      .input(setResearchKeyInput)
-      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["setResearchKey"]>>)
+    agentProviders: publicProcedure
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["agentProviders"]>>),
+    saveAgentProvider: publicProcedure
+      .input(agentProviderInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["saveAgentProvider"]>>),
+    testAgentProvider: publicProcedure
+      .input(agentProviderInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["testAgentProvider"]>>),
+    activateAgentProvider: publicProcedure
+      .input(activateAgentProviderInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["activateAgentProvider"]>>),
+    deleteAgentProvider: publicProcedure
+      .input(deleteAgentProviderInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["deleteAgentProvider"]>>),
+    researchProvider: publicProcedure
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["researchProvider"]>>),
+    setResearchProvider: publicProcedure
+      .input(setResearchProviderInput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as unknown as Awaited<ReturnType<SettingsRouter["setResearchProvider"]>>)
     }),
   sso: t.router({
     signInOptions: publicProcedure

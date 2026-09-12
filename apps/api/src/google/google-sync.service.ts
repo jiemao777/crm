@@ -1,9 +1,10 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { CalendarSyncService } from "./calendar-sync.service";
 import { GmailSyncService } from "./gmail-sync.service";
 import type { SyncSource } from "./google.constants";
 import { GoogleConnectionService } from "./google-connection.service";
 import { SyncStateService } from "./sync-state.service";
+import { ZohoConnectionService } from "./zoho-connection.service";
 
 const TICK_BUDGET_MS = 60_000;
 
@@ -24,6 +25,7 @@ export class GoogleSyncService {
 		private readonly calendar: CalendarSyncService,
 		private readonly gmail: GmailSyncService,
 		private readonly connections: GoogleConnectionService,
+		private readonly zoho: ZohoConnectionService,
 	) {}
 
 	async runDue(): Promise<TickSummary> {
@@ -81,6 +83,25 @@ export class GoogleSyncService {
 			}
 		}
 
+		if (Date.now() - startedAt <= TICK_BUDGET_MS) {
+			try {
+				const zoho = await this.zoho.runDue(
+					new Date(),
+					startedAt + TICK_BUDGET_MS,
+				);
+				summary.attempted += zoho.attempted;
+				summary.synced += zoho.synced;
+				summary.skipped += zoho.skipped;
+				summary.failed += zoho.failed;
+			} catch (error) {
+				summary.failed += 1;
+				this.logger.error(
+					{ message: "Zoho IMAP sync tick threw" },
+					error instanceof Error ? error.stack : String(error),
+				);
+			}
+		}
+
 		summary.durationMs = Date.now() - startedAt;
 
 		this.logger.log({
@@ -108,5 +129,31 @@ export class GoogleSyncService {
 		for (const source of ["calendar", "gmail"] as const) {
 			await this.runOne(userId, source);
 		}
+	}
+
+	async refreshMail(userId: string): Promise<{ providers: string[] }> {
+		const [google, zoho] = await Promise.all([
+			this.connections.status(userId),
+			this.zoho.status(userId),
+		]);
+		const providers: string[] = [];
+		if (
+			google.sources.some(
+				(source) => source.source === "gmail" && source.connected,
+			)
+		) {
+			await this.runOne(userId, "gmail");
+			providers.push("gmail");
+		}
+		if (zoho.connected) {
+			await this.zoho.syncNow(userId);
+			providers.push("zoho");
+		}
+		if (providers.length === 0) {
+			throw new NotFoundException(
+				"Connect Gmail or Zoho Mail before refreshing.",
+			);
+		}
+		return { providers };
 	}
 }

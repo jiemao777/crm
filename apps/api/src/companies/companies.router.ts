@@ -11,9 +11,11 @@ import type { z } from "zod";
 import type { AuthedTrpcContext } from "../trpc/context.types";
 import { AuthMiddleware } from "../trpc/middlewares/auth.middleware";
 import {
+	aiExtractInput,
 	companyCreateInput,
 	companyIdInput,
 	companyListInput,
+	companyMergeInput,
 	companyOptionsInput,
 	companyUpdateArgs,
 	setPrimaryContactInput,
@@ -42,24 +44,48 @@ export class CompaniesRouter {
 		return this.companies.options(q);
 	}
 
+	@Mutation({ input: aiExtractInput })
+	async aiExtract(@Input("text") text: string) {
+		return this.companies.aiExtract(text);
+	}
+
 	@Mutation({ input: companyCreateInput })
-	async create(@Input() input: z.infer<typeof companyCreateInput>) {
-		return this.companies.create(input);
+	async create(
+		@Ctx() ctx: AuthedTrpcContext,
+		@Input() input: z.infer<typeof companyCreateInput>,
+	) {
+		return this.companies.create(input, ctx.user.id);
 	}
 
 	@Mutation({ input: companyUpdateArgs })
-	async update(@Input() input: z.infer<typeof companyUpdateArgs>) {
-		return this.companies.update(input.id, input.data);
+	async update(
+		@Ctx() ctx: AuthedTrpcContext,
+		@Input() input: z.infer<typeof companyUpdateArgs>,
+	) {
+		return this.companies.update(input.id, input.data, ctx.user.id);
 	}
 
 	@Mutation({ input: companyIdInput })
-	async delete(@Input("id") id: string) {
-		return this.companies.delete(id);
+	async delete(@Ctx() ctx: AuthedTrpcContext, @Input("id") id: string) {
+		return this.companies.delete(id, ctx.user.id);
+	}
+
+	@Query()
+	async duplicates() {
+		return this.companies.duplicates();
+	}
+
+	@Mutation({ input: companyMergeInput })
+	async merge(
+		@Ctx() ctx: AuthedTrpcContext,
+		@Input() input: z.infer<typeof companyMergeInput>,
+	) {
+		return this.companies.merge(input.keepId, input.mergeId, ctx.user.id);
 	}
 
 	@Mutation({ input: companyIdInput })
-	async enrich(@Input("id") id: string) {
-		return this.companies.enrich(id);
+	async enrich(@Ctx() ctx: AuthedTrpcContext, @Input("id") id: string) {
+		return this.companies.enrich(id, ctx.user.id);
 	}
 
 	@Mutation({ input: companyIdInput })
@@ -69,8 +95,13 @@ export class CompaniesRouter {
 
 	@Mutation({ input: setPrimaryContactInput })
 	async setPrimaryContact(
+		@Ctx() ctx: AuthedTrpcContext,
 		@Input() input: z.infer<typeof setPrimaryContactInput>,
 	) {
-		return this.companies.setPrimaryContact(input.companyId, input.contactId);
+		return this.companies.setPrimaryContact(
+			input.companyId,
+			input.contactId,
+			ctx.user.id,
+		);
 	}
 }

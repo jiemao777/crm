@@ -53,7 +53,10 @@ export class ActivitiesRouter {
 	}
 
 	@Mutation({ input: completeInput })
-	async complete(@Input() input: z.infer<typeof completeInput>) {
-		return this.activities.complete(input.id, input.completed);
+	async complete(
+		@Ctx() ctx: AuthedTrpcContext,
+		@Input() input: z.infer<typeof completeInput>,
+	) {
+		return this.activities.complete(input.id, input.completed, ctx.user.id);
 	}
 }

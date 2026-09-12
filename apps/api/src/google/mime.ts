@@ -124,7 +124,13 @@ export function rootMessageId(
 }
 
 export function normaliseMessageId(value: string): string {
-	return value.trim().replace(/^</, "").replace(/>$/, "").toLowerCase();
+	const trimmed = value.trim();
+	const bracketed = trimmed.match(/<([^<>\s]+)>/);
+	const candidate = bracketed?.[1] ?? trimmed.split(/\s+/)[0] ?? "";
+	return candidate
+		.replace(/^[<]+/, "")
+		.replace(/[>,;]+$/, "")
+		.toLowerCase();
 }
 
 export function snippetOf(body: string, limit = 200): string | null {

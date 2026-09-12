@@ -1,3 +1,4 @@
+import type { Db } from "@crm/db";
 import { Injectable } from "@nestjs/common";
 import { TRPCError } from "@trpc/server";
 import type {
@@ -5,11 +6,15 @@ import type {
 	MiddlewareResponse,
 	TRPCMiddleware,
 } from "nestjs-trpc";
+import { requireWorkspaceRole } from "../../crm/access";
+import { InjectDatabase } from "../../database/database.constants";
 import { setRequestUserId } from "../../logging/request-context";
 import type { AuthedTrpcContext, BaseTrpcContext } from "../context.types";
 
 @Injectable()
 export class AuthMiddleware implements TRPCMiddleware {
+	constructor(@InjectDatabase() private readonly db: Db) {}
+
 	async use(opts: MiddlewareOptions): Promise<MiddlewareResponse> {
 		const ctx = opts.ctx as BaseTrpcContext;
 		const user = ctx.session?.user;
@@ -18,6 +23,7 @@ export class AuthMiddleware implements TRPCMiddleware {
 			throw new TRPCError({ code: "UNAUTHORIZED" });
 		}
 
+		await requireWorkspaceRole(this.db, user.id);
 		setRequestUserId(user.id);
 
 		const nextCtx: AuthedTrpcContext = { ...ctx, user };

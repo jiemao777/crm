@@ -1,9 +1,10 @@
 import {
+	ActivityType,
 	type Db,
 	type EnrichmentStatus,
 	type Prisma,
 	Prisma as PrismaNamespace,
-	type RecordSource,
+	RecordSource,
 } from "@crm/db";
 import {
 	BadRequestException,
@@ -14,13 +15,19 @@ import {
 } from "@nestjs/common";
 import { AgentQueueService } from "../agent/agent-queue.service";
 import { AgentTriggerService } from "../agent/agent-trigger.service";
+import { AiExtractService } from "../agent/ai-extract.service";
+import {
+	assertCompanyAccess,
+	assertContactAccess,
+	resolveOwnerId,
+} from "../crm/access";
 import {
 	ActivityStampService,
 	type StampTargets,
 } from "../crm/activity-stamp.service";
 import { blankToNull, toCents } from "../crm/values";
 import { InjectDatabase } from "../database/database.constants";
-import { OPEN_DEAL_STAGES } from "../deals/deal-stage";
+import { OPEN_INQUIRY_STAGES } from "../deals/deal-stage";
 import {
 	countsByKey,
 	FACET_ALL,
@@ -35,7 +42,7 @@ import type {
 	CompanyListInput,
 	CompanyUpdateInput,
 } from "./companies.contracts";
-import { normalizeDomain } from "./domain";
+import { normalizeDomain, rootDomain } from "./domain";
 import { FaviconService } from "./favicon.service";
 
 const OWNER_SELECT = {
@@ -44,6 +51,37 @@ const OWNER_SELECT = {
 	email: true,
 	image: true,
 } as const;
+
+const MERGE_ADOPTABLE = [
+	"domain",
+	"website",
+	"description",
+	"industry",
+	"subIndustry",
+	"city",
+	"stateCode",
+	"country",
+	"countryCode",
+	"phone",
+	"email",
+	"linkedinUrl",
+	"twitterUrl",
+	"githubUrl",
+	"pricingUrl",
+	"careersUrl",
+	"customerLevel",
+	"leadSource",
+	"productInterest",
+	"targetMarkets",
+	"language",
+	"timezone",
+	"logoUrl",
+	"logoDarkUrl",
+	"iconUrl",
+	"iconDarkUrl",
+	"iconTone",
+	"brandColor",
+] as const;
 
 export type CompanyRow = {
 	id: string;
@@ -55,6 +93,10 @@ export type CompanyRow = {
 	logoUrl: string | null;
 	brandColor: string | null;
 	industry: string | null;
+	customerType: "LEAD" | "BUYER" | "DISTRIBUTOR" | "AGENT" | "CUSTOMER";
+	customerLevel: string | null;
+	leadSource: string | null;
+	productInterest: string | null;
 	enrichmentStatus: EnrichmentStatus;
 	queued: boolean;
 	source: RecordSource;
@@ -94,7 +136,12 @@ export class CompaniesService {
 		private readonly queue: AgentQueueService,
 		private readonly favicon: FaviconService,
 		private readonly stamp: ActivityStampService,
+		private readonly ai: AiExtractService,
 	) {}
+
+	async aiExtract(text: string) {
+		return this.ai.extract(text);
+	}
 
 	async list(input: CompanyListInput): Promise<ListResult<CompanyRow>> {
 		const where = this.buildWhere(input);
@@ -118,13 +165,17 @@ export class CompaniesService {
 					logoUrl: true,
 					brandColor: true,
 					industry: true,
+					customerType: true,
+					customerLevel: true,
+					leadSource: true,
+					productInterest: true,
 					enrichmentStatus: true,
 					source: true,
 					owner: { select: OWNER_SELECT },
 					_count: {
 						select: {
 							contacts: true,
-							deals: { where: { stage: { in: [...OPEN_DEAL_STAGES] } } },
+							deals: { where: { stage: { in: [...OPEN_INQUIRY_STAGES] } } },
 						},
 					},
 					lastActivityAt: true,
@@ -148,6 +199,10 @@ export class CompaniesService {
 				logoUrl: row.logoUrl,
 				brandColor: row.brandColor,
 				industry: row.industry,
+				customerType: row.customerType,
+				customerLevel: row.customerLevel,
+				leadSource: row.leadSource,
+				productInterest: row.productInterest,
 				enrichmentStatus: row.enrichmentStatus,
 				queued: queued.has(row.id),
 				source: row.source,
@@ -178,6 +233,13 @@ export class CompaniesService {
 				iconTone: true,
 				brandColor: true,
 				industry: true,
+				customerType: true,
+				customerLevel: true,
+				leadSource: true,
+				productInterest: true,
+				targetMarkets: true,
+				language: true,
+				timezone: true,
 				subIndustry: true,
 				city: true,
 				stateCode: true,
@@ -219,14 +281,14 @@ export class CompaniesService {
 					},
 				},
 				deals: {
-					orderBy: [{ stage: "asc" }, { expectedCloseDate: "asc" }],
+					orderBy: [{ stage: "asc" }, { expectedOrderDate: "asc" }],
 					select: {
 						id: true,
 						name: true,
 						stage: true,
 						amount: true,
 						currency: true,
-						expectedCloseDate: true,
+						expectedOrderDate: true,
 						owner: { select: OWNER_SELECT },
 					},
 				},
@@ -250,7 +312,7 @@ export class CompaniesService {
 				...deal,
 				amount: undefined,
 				amountCents: toCents(deal.amount),
-				expectedCloseDate: deal.expectedCloseDate?.toISOString() ?? null,
+				expectedOrderDate: deal.expectedOrderDate?.toISOString() ?? null,
 			})),
 		};
 	}
@@ -264,8 +326,27 @@ export class CompaniesService {
 		});
 	}
 
-	async create(input: CompanyCreateInput) {
+	async create(input: CompanyCreateInput, actingUserId?: string) {
 		const domain = normalizeDomain(input.domain);
+		const ownerId = actingUserId
+			? await resolveOwnerId(this.db, actingUserId, input.ownerId)
+			: (input.ownerId ?? null);
+		const email = input.contact?.email?.trim().toLowerCase() || null;
+		const existingContact = email
+			? await this.db.contact.findUnique({
+					where: { email },
+					select: { id: true, companyId: true },
+				})
+			: null;
+
+		if (existingContact?.companyId) {
+			throw new ConflictException(
+				`A contact with ${email} already belongs to another customer.`,
+			);
+		}
+		if (actingUserId && existingContact) {
+			await assertContactAccess(this.db, actingUserId, existingContact.id);
+		}
 
 		if (domain) {
 			const existing = await this.db.company.findUnique({
@@ -279,15 +360,109 @@ export class CompaniesService {
 			}
 		}
 
-		const company = await this.db.company.create({
-			data: {
-				name: input.name.trim(),
-				domain,
-				website: domain ? `https://${domain}` : null,
-				ownerId: input.ownerId ?? null,
-			},
-			select: { id: true, name: true, domain: true },
-		});
+		let created: {
+			company: { id: string; name: string; domain: string | null };
+			contactId: string | null;
+			contactCreated: boolean;
+		};
+
+		try {
+			created = await this.db.$transaction(async (tx) => {
+				const company = await tx.company.create({
+					data: {
+						name: input.name.trim(),
+						domain,
+						website: domain ? `https://${domain}` : null,
+						ownerId,
+						customerType: input.customerType ?? "LEAD",
+						customerLevel: input.customerLevel ?? null,
+						leadSource: input.leadSource ?? null,
+						productInterest: input.productInterest ?? null,
+					},
+					select: { id: true, name: true, domain: true },
+				});
+
+				if (!input.contact?.firstName) {
+					return { company, contactId: null, contactCreated: false };
+				}
+
+				const contact = existingContact
+					? await tx.contact.update({
+							where: { id: existingContact.id },
+							data: { companyId: company.id },
+							select: { id: true },
+						})
+					: await tx.contact.create({
+							data: {
+								firstName: input.contact.firstName.trim(),
+								lastName: input.contact.lastName?.trim() || null,
+								email,
+								phone: input.contact.phone?.trim() || null,
+								companyId: company.id,
+								ownerId,
+								source: RecordSource.MANUAL,
+							},
+							select: { id: true },
+						});
+
+				await tx.company.update({
+					where: { id: company.id },
+					data: { primaryContactId: contact.id },
+				});
+
+				return {
+					company,
+					contactId: contact.id,
+					contactCreated: !existingContact,
+				};
+			});
+		} catch (error) {
+			throw this.translate(error, "new");
+		}
+		const { company } = created;
+
+		if (created.contactId) {
+			if (created.contactCreated) {
+				await this.agent.contactCreated(
+					created.contactId,
+					"Added together with a new customer",
+				);
+			}
+			if (email) {
+				await this.relinkThreadsFor(
+					company.id,
+					created.contactId,
+					email,
+					ownerId,
+				);
+			}
+		} else if (domain) {
+			const relinked = await this.db.emailThread.updateMany({
+				where: {
+					companyId: null,
+					contactId: null,
+					messages: { some: { fromEmail: { endsWith: `@${domain}` } } },
+				},
+				data: { companyId: company.id },
+			});
+			if (relinked.count > 0) {
+				await this.db.activity.updateMany({
+					where: {
+						companyId: null,
+						emailThread: {
+							messages: { some: { fromEmail: { endsWith: `@${domain}` } } },
+						},
+					},
+					data: { companyId: company.id },
+				});
+				this.logger.log({
+					message: "Unmatched threads linked by domain",
+					companyId: company.id,
+					domain,
+					count: relinked.count,
+				});
+			}
+		}
 
 		this.logger.log({
 			message: "Company created",
@@ -302,7 +477,74 @@ export class CompaniesService {
 		return company;
 	}
 
-	async update(id: string, input: CompanyUpdateInput) {
+	private async relinkThreadsFor(
+		companyId: string,
+		contactId: string,
+		email: string,
+		ownerId?: string | null,
+	): Promise<void> {
+		const threads = await this.db.emailThread.findMany({
+			where: {
+				companyId: null,
+				contactId: null,
+				messages: {
+					some: { fromEmail: { equals: email, mode: "insensitive" } },
+				},
+			},
+			select: {
+				id: true,
+				subject: true,
+				lastMessageAt: true,
+				messages: {
+					orderBy: { sentAt: "desc" },
+					take: 1,
+					select: { body: true },
+				},
+			},
+		});
+		if (threads.length === 0) return;
+
+		await this.db.emailThread.updateMany({
+			where: { id: { in: threads.map((thread) => thread.id) } },
+			data: { companyId, contactId },
+		});
+		for (const thread of threads) {
+			await this.db.activity.upsert({
+				where: { emailThreadId: thread.id },
+				create: {
+					type: ActivityType.EMAIL,
+					subject: thread.subject ?? "(no subject)",
+					body: (thread.messages[0]?.body ?? "").slice(0, 200) || null,
+					occurredAt: thread.lastMessageAt,
+					companyId,
+					contactId,
+					createdById: ownerId ?? (await this.firstUserId()),
+					emailThreadId: thread.id,
+					meta: { synced: true, source: "zoho-imap" },
+				},
+				update: { companyId, contactId },
+			});
+		}
+
+		this.logger.log({
+			message: "Unmatched threads linked to a new customer",
+			companyId,
+			contactId,
+			email,
+			count: threads.length,
+		});
+	}
+
+	private async firstUserId(): Promise<string> {
+		const user = await this.db.user.findFirst({
+			select: { id: true },
+			orderBy: { createdAt: "asc" },
+		});
+		return user?.id ?? "system";
+	}
+
+	async update(id: string, input: CompanyUpdateInput, actingUserId?: string) {
+		if (actingUserId) await assertCompanyAccess(this.db, actingUserId, id);
 		const data: Prisma.CompanyUpdateInput = {};
 
 		if (input.name !== undefined) data.name = input.name.trim();
@@ -312,6 +554,20 @@ export class CompaniesService {
 		}
 		if (input.industry !== undefined)
 			data.industry = blankToNull(input.industry);
+		if (input.customerType !== undefined)
+			data.customerType = input.customerType;
+		if (input.customerLevel !== undefined)
+			data.customerLevel = blankToNull(input.customerLevel ?? "");
+		if (input.leadSource !== undefined)
+			data.leadSource = blankToNull(input.leadSource ?? "");
+		if (input.productInterest !== undefined)
+			data.productInterest = blankToNull(input.productInterest ?? "");
+		if (input.targetMarkets !== undefined)
+			data.targetMarkets = blankToNull(input.targetMarkets ?? "");
+		if (input.language !== undefined)
+			data.language = blankToNull(input.language ?? "");
+		if (input.timezone !== undefined)
+			data.timezone = blankToNull(input.timezone ?? "");
 		if (input.city !== undefined) data.city = blankToNull(input.city);
 		if (input.stateCode !== undefined) {
 			data.stateCode = blankToNull(input.stateCode);
@@ -323,8 +579,11 @@ export class CompaniesService {
 			data.linkedinUrl = blankToNull(input.linkedinUrl);
 		}
 		if (input.ownerId !== undefined) {
-			data.owner = input.ownerId
-				? { connect: { id: input.ownerId } }
+			const ownerId = actingUserId
+				? await resolveOwnerId(this.db, actingUserId, input.ownerId)
+				: input.ownerId;
+			data.owner = ownerId
+				? { connect: { id: ownerId } }
 				: { disconnect: true };
 		}
 
@@ -370,7 +629,11 @@ export class CompaniesService {
 		}
 	}
 
-	async delete(id: string): Promise<{ id: string; name: string }> {
+	async delete(
+		id: string,
+		actingUserId?: string,
+	): Promise<{ id: string; name: string }> {
+		if (actingUserId) await assertCompanyAccess(this.db, actingUserId, id);
 		let deleted: { targets: StampTargets; name: string };
 
 		try {
@@ -404,7 +667,150 @@ export class CompaniesService {
 		return { id, name: deleted.name };
 	}
 
-	async enrich(id: string): Promise<{ id: string; queued: boolean }> {
+	async duplicates() {
+		const rows = await this.db.company.findMany({
+			where: { domain: { not: null } },
+			select: {
+				id: true,
+				name: true,
+				domain: true,
+				_count: {
+					select: { contacts: true, deals: true, emailThreads: true },
+				},
+			},
+		});
+
+		const groups = new Map<string, typeof rows>();
+		for (const row of rows) {
+			const root = rootDomain(row.domain);
+			if (!root) continue;
+			const members = groups.get(root) ?? [];
+			members.push(row);
+			groups.set(root, members);
+		}
+
+		return [...groups.entries()]
+			.filter(([, members]) => members.length > 1)
+			.map(([root, members]) => ({
+				root,
+				members: members
+					.map((member) => ({
+						id: member.id,
+						name: member.name,
+						domain: member.domain,
+						contacts: member._count.contacts,
+						deals: member._count.deals,
+						threads: member._count.emailThreads,
+						records:
+							member._count.contacts +
+							member._count.deals +
+							member._count.emailThreads,
+					}))
+					.sort((a, b) => b.records - a.records),
+			}))
+			.sort((a, b) => b.members.length - a.members.length);
+	}
+
+	async merge(keepId: string, mergeId: string, actingUserId: string) {
+		if (keepId === mergeId) {
+			throw new BadRequestException("Choose two different companies to merge.");
+		}
+		await assertCompanyAccess(this.db, actingUserId, keepId);
+		await assertCompanyAccess(this.db, actingUserId, mergeId);
+
+		const result = await this.db.$transaction(async (tx) => {
+			const include = { enrichment: { select: { companyId: true } } } as const;
+			const [keep, merge] = await Promise.all([
+				tx.company.findUnique({ where: { id: keepId }, include }),
+				tx.company.findUnique({ where: { id: mergeId }, include }),
+			]);
+			if (!keep) throw new NotFoundException(`No company with id ${keepId}.`);
+			if (!merge) {
+				throw new NotFoundException(`No company with id ${mergeId}.`);
+			}
+
+			await tx.contact.updateMany({
+				where: { companyId: mergeId },
+				data: { companyId: keepId },
+			});
+			await tx.deal.updateMany({
+				where: { companyId: mergeId },
+				data: { companyId: keepId },
+			});
+			await tx.activity.updateMany({
+				where: { companyId: mergeId },
+				data: { companyId: keepId },
+			});
+			await tx.emailThread.updateMany({
+				where: { companyId: mergeId },
+				data: { companyId: keepId },
+			});
+			await tx.calendarEvent.updateMany({
+				where: { companyId: mergeId },
+				data: { companyId: keepId },
+			});
+			await tx.agentConversation.updateMany({
+				where: { companyId: mergeId },
+				data: { companyId: keepId },
+			});
+			await tx.agentTask.updateMany({
+				where: { companyId: mergeId },
+				data: { companyId: keepId },
+			});
+
+			if (!keep.enrichment && merge.enrichment) {
+				await tx.companyEnrichment.update({
+					where: { companyId: mergeId },
+					data: { companyId: keepId },
+				});
+			}
+
+			const data: Prisma.CompanyUpdateInput = {};
+			for (const field of MERGE_ADOPTABLE) {
+				const incoming = merge[field];
+				if (keep[field] === null && incoming !== null) {
+					(data as Record<string, string>)[field] = incoming;
+				}
+			}
+			if (keep.customerType === "LEAD" && merge.customerType !== "LEAD") {
+				data.customerType = merge.customerType;
+			}
+			const lastActivityAt =
+				keep.lastActivityAt && merge.lastActivityAt
+					? keep.lastActivityAt > merge.lastActivityAt
+						? keep.lastActivityAt
+						: merge.lastActivityAt
+					: (keep.lastActivityAt ?? merge.lastActivityAt);
+			data.lastActivityAt = lastActivityAt;
+
+			await tx.company.update({
+				where: { id: mergeId },
+				data: { domain: null, primaryContactId: null },
+			});
+			if (keep.primaryContactId === null && merge.primaryContactId !== null) {
+				data.primaryContact = { connect: { id: merge.primaryContactId } };
+			}
+			await tx.company.update({ where: { id: keepId }, data });
+			await tx.company.delete({ where: { id: mergeId } });
+
+			return { keepName: keep.name, mergedName: merge.name };
+		});
+
+		this.logger.log({
+			message: "Company merged",
+			keepId,
+			mergeId,
+			mergedName: result.mergedName,
+		});
+
+		return { id: keepId, name: result.keepName, merged: result.mergedName };
+	}
+
+	async enrich(
+		id: string,
+		actingUserId?: string,
+	): Promise<{ id: string; queued: boolean }> {
+		if (actingUserId) await assertCompanyAccess(this.db, actingUserId, id);
 		const company = await this.db.company.findUnique({
 			where: { id },
 			select: { id: true },
@@ -424,6 +830,7 @@ export class CompaniesService {
 	}
 
 	async research(id: string, actingUserId: string) {
+		await assertCompanyAccess(this.db, actingUserId, id);
 		const company = await this.db.company.findUnique({
 			where: { id },
 			select: { id: true, domain: true },
@@ -447,7 +854,17 @@ export class CompaniesService {
 		return { ok: true as const, queued: true as const };
 	}
 
-	async setPrimaryContact(companyId: string, contactId: string | null) {
+	async setPrimaryContact(
+		companyId: string,
+		contactId: string | null,
+		actingUserId?: string,
+	) {
+		if (actingUserId) {
+			await assertCompanyAccess(this.db, actingUserId, companyId);
+			if (contactId) {
+				await assertContactAccess(this.db, actingUserId, contactId);
+			}
+		}
 		if (contactId) {
 			const contact = await this.db.contact.findUnique({
 				where: { id: contactId },
@@ -496,6 +913,15 @@ export class CompaniesService {
 			where.industry = input.industry;
 		}
 
+		if (input.customerType !== FACET_ALL) {
+			where.customerType = input.customerType as
+				| "LEAD"
+				| "BUYER"
+				| "DISTRIBUTOR"
+				| "AGENT"
+				| "CUSTOMER";
+		}
+
 		if (input.enrichment !== FACET_ALL) {
 			where.enrichmentStatus = input.enrichment as EnrichmentStatus;
 		}
@@ -510,32 +936,39 @@ export class CompaniesService {
 	private async facetCounts(input: CompanyListInput) {
 		const where = this.searchFilter(input.q);
 
-		const [owners, industries, enrichment, sources] = await Promise.all([
-			this.db.company.groupBy({
-				by: ["ownerId"],
-				where,
-				_count: { _all: true },
-			}),
-			this.db.company.groupBy({
-				by: ["industry"],
-				where,
-				_count: { _all: true },
-			}),
-			this.db.company.groupBy({
-				by: ["enrichmentStatus"],
-				where,
-				_count: { _all: true },
-			}),
-			this.db.company.groupBy({
-				by: ["source"],
-				where,
-				_count: { _all: true },
-			}),
-		]);
+		const [owners, industries, customerTypes, enrichment, sources] =
+			await Promise.all([
+				this.db.company.groupBy({
+					by: ["ownerId"],
+					where,
+					_count: { _all: true },
+				}),
+				this.db.company.groupBy({
+					by: ["industry"],
+					where,
+					_count: { _all: true },
+				}),
+				this.db.company.groupBy({
+					by: ["customerType"],
+					where,
+					_count: { _all: true },
+				}),
+				this.db.company.groupBy({
+					by: ["enrichmentStatus"],
+					where,
+					_count: { _all: true },
+				}),
+				this.db.company.groupBy({
+					by: ["source"],
+					where,
+					_count: { _all: true },
+				}),
+			]);
 
 		return {
 			owner: countsByKey(owners, "ownerId", FACET_UNASSIGNED),
 			industry: countsByKey(industries, "industry"),
+			customerType: countsByKey(customerTypes, "customerType"),
 			enrichment: countsByKey(enrichment, "enrichmentStatus"),
 			source: countsByKey(sources, "source"),
 		};

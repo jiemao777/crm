@@ -2,6 +2,7 @@ import { isGoogleConfigured, signsInWithGoogle } from "@crm/auth";
 import { type Db, GoogleSyncStatus } from "@crm/db";
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { normalizeDomain } from "../companies/domain";
+import { requireWorkspaceAdmin } from "../crm/access";
 import { ActivityStampService } from "../crm/activity-stamp.service";
 import { InjectDatabase } from "../database/database.constants";
 import {
@@ -123,16 +124,95 @@ export class GoogleConnectionService {
 	}
 
 	async purgeSyncedData(userId: string): Promise<{ purged: number }> {
-		const [threads, events] = await this.db.$transaction([
-			this.db.emailThread.deleteMany({
-				where: { messages: { some: { syncedByUserId: userId } } },
-			}),
-			this.db.calendarEvent.deleteMany({ where: { syncedByUserId: userId } }),
-		]);
+		const result = await this.db.$transaction(async (tx) => {
+			const messageLinks = await tx.emailMessageSync.findMany({
+				where: { userId, source: "gmail" },
+				select: { messageId: true },
+			});
+			await tx.emailMessageSync.deleteMany({
+				where: { userId, source: "gmail" },
+			});
+
+			const legacyMessages = await tx.emailMessage.findMany({
+				where: { syncedByUserId: userId, syncs: { none: {} } },
+				select: { id: true, threadId: true },
+			});
+			const candidateMessageIds = new Set([
+				...messageLinks.map((link) => link.messageId),
+				...legacyMessages.map((message) => message.id),
+			]);
+			const messages =
+				candidateMessageIds.size === 0
+					? []
+					: await tx.emailMessage.findMany({
+							where: {
+								id: { in: [...candidateMessageIds] },
+								syncs: { none: {} },
+							},
+							select: { id: true, threadId: true },
+						});
+			const threadIds = [
+				...new Set(messages.map((message) => message.threadId)),
+			];
+			const eventsLinks = await tx.calendarEventSync.findMany({
+				where: { userId },
+				select: { eventId: true },
+			});
+			await tx.calendarEventSync.deleteMany({ where: { userId } });
+			const legacyEvents = await tx.calendarEvent.findMany({
+				where: { syncedByUserId: userId, syncs: { none: {} } },
+				select: { id: true },
+			});
+			const candidateEventIds = new Set([
+				...eventsLinks.map((link) => link.eventId),
+				...legacyEvents.map((event) => event.id),
+			]);
+			const events =
+				candidateEventIds.size === 0
+					? { count: 0 }
+					: await tx.calendarEvent.deleteMany({
+							where: {
+								id: { in: [...candidateEventIds] },
+								syncs: { none: {} },
+							},
+						});
+			await tx.emailMessage.deleteMany({
+				where: {
+					id: { in: messages.map((message) => message.id) },
+					syncs: { none: {} },
+				},
+			});
+
+			for (const threadId of threadIds) {
+				const stats = await tx.emailMessage.aggregate({
+					where: { threadId },
+					_count: { _all: true },
+					_min: { sentAt: true },
+					_max: { sentAt: true },
+				});
+				if (stats._count._all === 0) {
+					await tx.emailThread.delete({ where: { id: threadId } });
+					continue;
+				}
+				const firstMessageAt = stats._min.sentAt;
+				const lastMessageAt = stats._max.sentAt;
+				if (!firstMessageAt || !lastMessageAt) continue;
+				await tx.emailThread.update({
+					where: { id: threadId },
+					data: {
+						messageCount: stats._count._all,
+						firstMessageAt,
+						lastMessageAt,
+					},
+				});
+			}
+
+			return { messages: messages.length, events: events.count };
+		});
 
 		await this.stamp.recomputeAll();
 
-		const purged = threads.count + events.count;
+		const purged = result.messages + result.events;
 
 		this.logger.log({ message: "Synced data purged", userId, purged });
 
@@ -161,7 +241,9 @@ export class GoogleConnectionService {
 	async suppressDomain(
 		domain: string,
 		options: { reason?: string; purge: boolean },
+		actingUserId?: string,
 	): Promise<{ domain: string; purged: number }> {
+		if (actingUserId) await requireWorkspaceAdmin(this.db, actingUserId);
 		const normalised = normalizeDomain(domain);
 		if (!normalised) {
 			throw new NotFoundException(`"${domain}" is not a domain.`);

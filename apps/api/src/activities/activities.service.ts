@@ -5,6 +5,12 @@ import {
 	Logger,
 	NotFoundException,
 } from "@nestjs/common";
+import {
+	assertCompanyAccess,
+	assertContactAccess,
+	assertDealAccess,
+	assertTaskAccess,
+} from "../crm/access";
 import { ActivityStampService } from "../crm/activity-stamp.service";
 import { blankToNull } from "../crm/values";
 import { InjectDatabase } from "../database/database.constants";
@@ -123,7 +129,67 @@ export class ActivitiesService {
 	}
 
 	async create(input: ActivityCreateInput, actingUserId: string) {
-		const companyId = await this.resolveCompanyId(input);
+		const [deal, contact, company] = await Promise.all([
+			input.dealId
+				? this.db.deal.findUnique({
+						where: { id: input.dealId },
+						select: { id: true, companyId: true, ownerId: true },
+					})
+				: null,
+			input.contactId
+				? this.db.contact.findUnique({
+						where: { id: input.contactId },
+						select: { id: true, companyId: true, ownerId: true },
+					})
+				: null,
+			input.companyId
+				? this.db.company.findUnique({
+						where: { id: input.companyId },
+						select: { id: true, ownerId: true },
+					})
+				: null,
+		]);
+
+		if (input.dealId) {
+			await assertDealAccess(this.db, actingUserId, input.dealId);
+			if (!deal)
+				throw new NotFoundException(`No deal with id ${input.dealId}.`);
+		}
+		if (input.contactId) {
+			await assertContactAccess(this.db, actingUserId, input.contactId);
+			if (!contact) {
+				throw new NotFoundException(`No contact with id ${input.contactId}.`);
+			}
+		}
+		if (input.companyId) {
+			await assertCompanyAccess(this.db, actingUserId, input.companyId);
+			if (!company) {
+				throw new NotFoundException(`No company with id ${input.companyId}.`);
+			}
+		}
+
+		const companyIds = [
+			input.companyId ?? null,
+			contact?.companyId ?? null,
+			deal?.companyId ?? null,
+		].filter((id): id is string => id !== null);
+		if (new Set(companyIds).size > 1) {
+			throw new BadRequestException(
+				"An activity's company, contact and inquiry must belong together.",
+			);
+		}
+		const associatedCompanyId = input.companyId ?? deal?.companyId ?? null;
+		if (
+			input.contactId &&
+			associatedCompanyId &&
+			contact?.companyId !== associatedCompanyId
+		) {
+			throw new BadRequestException(
+				"That contact does not belong to the selected company.",
+			);
+		}
+
+		const companyId = companyIds[0] ?? null;
 
 		const isTask = input.type === ActivityType.TASK;
 
@@ -156,7 +222,8 @@ export class ActivitiesService {
 		return serializeEntry(activity);
 	}
 
-	async complete(id: string, completed: boolean) {
+	async complete(id: string, completed: boolean, actingUserId: string) {
+		await assertTaskAccess(this.db, actingUserId, id);
 		const activity = await this.db.activity.findUnique({
 			where: { id },
 			select: { type: true },
@@ -212,36 +279,6 @@ export class ActivitiesService {
 		throw new BadRequestException(
 			"A timeline needs a company, a contact or a deal.",
 		);
-	}
-
-	private async resolveCompanyId(
-		input: ActivityCreateInput,
-	): Promise<string | null> {
-		if (input.companyId) return input.companyId;
-
-		if (input.dealId) {
-			const deal = await this.db.deal.findUnique({
-				where: { id: input.dealId },
-				select: { companyId: true },
-			});
-			if (!deal) {
-				throw new NotFoundException(`No deal with id ${input.dealId}.`);
-			}
-			return deal.companyId;
-		}
-
-		if (input.contactId) {
-			const contact = await this.db.contact.findUnique({
-				where: { id: input.contactId },
-				select: { companyId: true },
-			});
-			if (!contact) {
-				throw new NotFoundException(`No contact with id ${input.contactId}.`);
-			}
-			return contact.companyId;
-		}
-
-		return null;
 	}
 }
 
