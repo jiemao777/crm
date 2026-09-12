@@ -34,12 +34,6 @@ export function formatPercent(rate: number): string {
 	}).format(rate);
 }
 
-const dayFormat = new Intl.DateTimeFormat(undefined, {
-	month: "short",
-	day: "numeric",
-	year: "numeric",
-});
-
 function pad(value: number): string {
 	return String(value).padStart(2, "0");
 }
@@ -56,9 +50,18 @@ export function fromDay(value: string | null | undefined): Date | undefined {
 	return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-export function formatDay(value: string | null | undefined): string {
+export function formatDay(
+	value: string | null | undefined,
+	locale = "en-US",
+): string {
 	const date = fromDay(value);
-	return date ? dayFormat.format(date) : (value ?? "—");
+	return date
+		? new Intl.DateTimeFormat(locale, {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+			}).format(date)
+		: (value ?? "—");
 }
 
 export function relativeTimeFromIso(iso: string | null | undefined): string {

@@ -14,21 +14,29 @@ import { formatDay, fromDay, toDay } from "@crm/ui/lib/format";
 import { cn } from "@crm/ui/lib/utils";
 import type { VariantProps } from "class-variance-authority";
 import { useState } from "react";
+import { enUS, zhCN } from "react-day-picker/locale";
+
+export type DatePickerProps = {
+	id?: string;
+	value: string | null | undefined;
+	onChange: (next: string) => void;
+	placeholder?: string;
+	clearLabel?: string;
+	locale?: "en-US" | "zh-CN";
+} & VariantProps<typeof selectTriggerVariants>;
 
 export function DatePicker({
 	id,
 	value,
 	onChange,
 	placeholder = "Select a date",
+	clearLabel = "Clear",
+	locale,
 	variant,
-}: {
-	id?: string;
-	value: string | null | undefined;
-	onChange: (next: string) => void;
-	placeholder?: string;
-} & VariantProps<typeof selectTriggerVariants>) {
+}: DatePickerProps) {
 	const [open, setOpen] = useState(false);
 	const selected = fromDay(value);
+	const calendarLocale = locale === "zh-CN" ? zhCN : enUS;
 	const thisYear = new Date().getFullYear();
 
 	const choose = (next: string) => {
@@ -48,7 +56,7 @@ export function DatePicker({
 					className={cn(selectTriggerVariants({ variant }), "w-full")}
 				>
 					<span className="line-clamp-1">
-						{selected ? formatDay(value) : placeholder}
+						{selected ? formatDay(value, locale) : placeholder}
 					</span>
 					<Icon
 						icon={CalendarGlyph}
@@ -59,6 +67,7 @@ export function DatePicker({
 			<PopoverContent size="fit" align="start">
 				<Calendar
 					mode="single"
+					locale={calendarLocale}
 					selected={selected}
 					startMonth={new Date(thisYear - 10, 0)}
 					endMonth={new Date(thisYear + 10, 11)}
@@ -75,7 +84,7 @@ export function DatePicker({
 							className="w-full justify-start"
 							onClick={() => choose("")}
 						>
-							Clear
+							{clearLabel}
 						</Button>
 					</div>
 				) : null}

@@ -837,12 +837,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.link-hover,
-	.link-hover *,
-	.link-hover::before,
-	.link-hover::after {
-		animation: none !important;
-		transition-duration: 0.01ms !important;
+	:root .link-hover,
+	:root .link-hover *,
+	:root .link-hover::before,
+	:root .link-hover::after {
+		animation: none;
+		transition-duration: 0.01ms;
 	}
 }
 

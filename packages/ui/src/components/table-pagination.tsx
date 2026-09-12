@@ -8,6 +8,13 @@ import type { ReactNode } from "react";
 
 const numberFormat = new Intl.NumberFormat();
 
+export type TablePaginationLabels = {
+	noResults: ReactNode;
+	showing: (start: string, end: string, total: string) => ReactNode;
+	previous: ReactNode;
+	next: ReactNode;
+};
+
 export function TablePagination({
 	page,
 	totalPages,
@@ -16,6 +23,7 @@ export function TablePagination({
 	onPageChange,
 	loading = false,
 	meta,
+	labels,
 }: {
 	page: number;
 	totalPages: number;
@@ -24,6 +32,7 @@ export function TablePagination({
 	onPageChange: (page: number) => void;
 	loading?: boolean;
 	meta?: ReactNode;
+	labels?: Partial<TablePaginationLabels>;
 }) {
 	const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
 	const rangeEnd = Math.min(page * pageSize, total);
@@ -34,8 +43,13 @@ export function TablePagination({
 				{loading && <Spinner />}
 				{meta ??
 					(total === 0
-						? "No results"
-						: `Showing ${numberFormat.format(rangeStart)}–${numberFormat.format(
+						? (labels?.noResults ?? "No results")
+						: labels?.showing?.(
+								numberFormat.format(rangeStart),
+								numberFormat.format(rangeEnd),
+								numberFormat.format(total),
+							) ??
+							`Showing ${numberFormat.format(rangeStart)}–${numberFormat.format(
 								rangeEnd,
 							)} of ${numberFormat.format(total)}`)}
 			</span>
@@ -48,7 +62,7 @@ export function TablePagination({
 						onClick={() => onPageChange(Math.max(1, page - 1))}
 					>
 						<ChevronLeft data-icon="inline-start" />
-						Previous
+						{labels?.previous ?? "Previous"}
 					</Button>
 					<span className="text-muted-foreground text-xs tabular-nums">
 						{page} / {totalPages}
@@ -59,7 +73,7 @@ export function TablePagination({
 						disabled={page >= totalPages}
 						onClick={() => onPageChange(page + 1)}
 					>
-						Next
+						{labels?.next ?? "Next"}
 						<ChevronRight data-icon="inline-end" />
 					</Button>
 				</div>

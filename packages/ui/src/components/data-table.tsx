@@ -19,7 +19,10 @@ import {
 	DropdownMenuTrigger,
 } from "@crm/ui/components/dropdown-menu";
 import { Spinner } from "@crm/ui/components/spinner";
-import { TablePagination } from "@crm/ui/components/table-pagination";
+import {
+	TablePagination,
+	type TablePaginationLabels,
+} from "@crm/ui/components/table-pagination";
 import {
 	Table,
 	TableBody,
@@ -68,6 +71,20 @@ export type DataTableTabs = {
 	options: { value: string; label: string }[];
 };
 
+export type DataTableLabels = {
+	all: string;
+	filters: string;
+	sort: string;
+	sortBy: string;
+	detail: string;
+	ascending: string;
+	descending: string;
+	columns: string;
+	toggleColumns: string;
+	noResults: ReactNode;
+	pagination: Partial<TablePaginationLabels>;
+};
+
 export type DataTableExpandable<TRow, TSub> = {
 	isExpandable: (row: TRow) => boolean;
 	getSubRows: (row: TRow) => TSub[];
@@ -94,6 +111,7 @@ export type DataTableProps<TRow, TSub> = {
 	search?: ReactNode;
 	meta?: ReactNode;
 	empty?: ReactNode;
+	labels?: Partial<DataTableLabels>;
 	className?: string;
 	tableClassName?: string;
 };
@@ -155,6 +173,7 @@ export function DataTable<TRow, TSub = unknown>({
 	search,
 	meta,
 	empty,
+	labels,
 	className,
 	tableClassName,
 }: DataTableProps<TRow, TSub>) {
@@ -187,7 +206,7 @@ export function DataTable<TRow, TSub = unknown>({
 			: tabs?.options.find((option) => option.value === query.tab);
 	const activeTabLabel = activeTabOption
 		? activeTabOption.label
-		: (tabs?.allLabel ?? "All");
+		: (tabs?.allLabel ?? labels?.all ?? "All");
 
 	const deferredRows = useDeferredValue(rows);
 	const anyExpandable =
@@ -227,7 +246,7 @@ export function DataTable<TRow, TSub = unknown>({
 					>
 						<span className="flex items-center gap-2">
 							<Filter />
-							Filters
+							{labels?.filters ?? "Filters"}
 							{activeFilterCount > 0 && (
 								<span className="tabular-nums opacity-60">
 									({activeFilterCount})
@@ -271,7 +290,9 @@ export function DataTable<TRow, TSub = unknown>({
 									onValueChange={(value) => query.setTab(value)}
 								>
 									<DropdownMenuRadioItem value="all">
-										<span className="flex-1">{tabs.allLabel ?? "All"}</span>
+										<span className="flex-1">
+											{tabs.allLabel ?? labels?.all ?? "All"}
+										</span>
 									</DropdownMenuRadioItem>
 									{tabs.options.map((option) => {
 										if (tabCounts?.[option.value] === 0) return null;
@@ -342,18 +363,20 @@ export function DataTable<TRow, TSub = unknown>({
 										className="justify-start sm:justify-center"
 									>
 										<ArrowsVertical data-icon="inline-start" />
-										Sort
+										{labels?.sort ?? "Sort"}
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="end" className="min-w-48">
-									<DropdownMenuLabel>Sort by</DropdownMenuLabel>
+									<DropdownMenuLabel>
+										{labels?.sortBy ?? "Sort by"}
+									</DropdownMenuLabel>
 									<DropdownMenuRadioGroup
 										value={query.sort}
 										onValueChange={query.setSort}
 									>
 										{anyExpandable && (
 											<DropdownMenuRadioItem value="detail">
-												Detail
+												{labels?.detail ?? "Detail"}
 											</DropdownMenuRadioItem>
 										)}
 										{sortableColumns.map((column) => (
@@ -370,10 +393,10 @@ export function DataTable<TRow, TSub = unknown>({
 										}
 									>
 										<DropdownMenuRadioItem value="asc">
-											Ascending
+											{labels?.ascending ?? "Ascending"}
 										</DropdownMenuRadioItem>
 										<DropdownMenuRadioItem value="desc">
-											Descending
+											{labels?.descending ?? "Descending"}
 										</DropdownMenuRadioItem>
 									</DropdownMenuRadioGroup>
 								</DropdownMenuContent>
@@ -388,14 +411,16 @@ export function DataTable<TRow, TSub = unknown>({
 										className="justify-start sm:justify-center"
 									>
 										<Column data-icon="inline-start" />
-										Columns
+										{labels?.columns ?? "Columns"}
 										<span className="tabular-nums opacity-60">
 											({visibleColumns.length})
 										</span>
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="end" className="min-w-48">
-									<DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+									<DropdownMenuLabel>
+										{labels?.toggleColumns ?? "Toggle columns"}
+									</DropdownMenuLabel>
 									{hideable.map((column) => (
 										<DropdownMenuCheckboxItem
 											key={column.id}
@@ -431,7 +456,9 @@ export function DataTable<TRow, TSub = unknown>({
 					<TableRow>
 						{anyExpandable && (
 							<TableHead className="h-11 w-10 px-3">
-								<span className="sr-only">Detail</span>
+								<span className="sr-only">
+									{labels?.detail ?? "Detail"}
+								</span>
 							</TableHead>
 						)}
 						{visibleColumns.map((column) => {
@@ -483,7 +510,11 @@ export function DataTable<TRow, TSub = unknown>({
 								colSpan={colCount}
 								className="h-32 whitespace-normal py-8 text-center align-middle text-muted-foreground"
 							>
-								{loading ? <Spinner /> : (empty ?? "No results found.")}
+								{loading ? (
+									<Spinner />
+								) : (
+									empty ?? labels?.noResults ?? "No results found."
+								)}
 							</TableCell>
 						</TableRow>
 					) : (
@@ -604,6 +635,7 @@ export function DataTable<TRow, TSub = unknown>({
 				onPageChange={(page) => query.setPage(page)}
 				loading={loading}
 				meta={meta}
+				labels={labels?.pagination}
 			/>
 		</div>
 	);
