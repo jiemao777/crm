@@ -80,6 +80,21 @@ export class AgentTriggerService {
 		});
 	}
 
+	async inquiryChanged(
+		dealId: string,
+		reason: string,
+		delayMs = 0,
+	): Promise<void> {
+		await this.enqueue({
+			dealId,
+			kind: "inquiry-intelligence",
+			reason,
+			priority: PRIORITY.inquiry,
+			budget: 4,
+			delayMs,
+		});
+	}
+
 	async mailReceived(input: {
 		threadId: string;
 		userId: string;
@@ -162,6 +177,7 @@ export class AgentTriggerService {
 	private async enqueue(task: {
 		contactId?: string;
 		companyId?: string;
+		dealId?: string;
 		emailThreadId?: string;
 		userId?: string;
 		allowCreate?: boolean;
@@ -169,6 +185,7 @@ export class AgentTriggerService {
 		reason: string;
 		priority: number;
 		budget: number;
+		delayMs?: number;
 	}): Promise<void> {
 		try {
 			const pending = await this.db.agentTask.findFirst({
@@ -177,6 +194,7 @@ export class AgentTriggerService {
 					finishedAt: null,
 					...(task.contactId ? { contactId: task.contactId } : {}),
 					...(task.companyId ? { companyId: task.companyId } : {}),
+					...(task.dealId ? { dealId: task.dealId } : {}),
 					...(task.emailThreadId ? { emailThreadId: task.emailThreadId } : {}),
 				},
 				select: { id: true },
@@ -188,6 +206,7 @@ export class AgentTriggerService {
 				data: {
 					contactId: task.contactId ?? null,
 					companyId: task.companyId ?? null,
+					dealId: task.dealId ?? null,
 					emailThreadId: task.emailThreadId ?? null,
 					userId: task.userId ?? null,
 					allowCreate: task.allowCreate ?? false,
@@ -195,7 +214,7 @@ export class AgentTriggerService {
 					reason: task.reason,
 					priority: task.priority,
 					budget: task.budget,
-					dueAt: new Date(),
+					dueAt: new Date(Date.now() + (task.delayMs ?? 0)),
 				},
 			});
 

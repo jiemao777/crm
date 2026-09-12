@@ -4,6 +4,7 @@ export type LeasedTask = {
 	id: string;
 	contactId: string | null;
 	companyId: string | null;
+	dealId: string | null;
 	emailThreadId: string | null;
 	userId: string | null;
 	allowCreate: boolean;
@@ -60,6 +61,7 @@ export async function claimDue(
 		) AS due
 		WHERE t.id = due.id
 		RETURNING t.id, t."contactId", t."companyId", t."emailThreadId",
+			t."dealId",
 			t."userId", t."allowCreate", t.kind, t.reason, t.budget, t.attempts,
 			t.priority, t."dueAt";
 	`;
@@ -137,6 +139,7 @@ export async function noteSession(
 export async function scheduleTask(input: {
 	contactId?: string | null;
 	companyId?: string | null;
+	dealId?: string | null;
 	emailThreadId?: string | null;
 	userId?: string | null;
 	allowCreate?: boolean;
@@ -152,6 +155,7 @@ export async function scheduleTask(input: {
 			finishedAt: null,
 			contactId: input.contactId ?? undefined,
 			companyId: input.companyId ?? undefined,
+			dealId: input.dealId ?? undefined,
 			emailThreadId: input.emailThreadId ?? undefined,
 		},
 		select: { id: true },
@@ -169,6 +173,7 @@ export async function scheduleTask(input: {
 		data: {
 			contactId: input.contactId ?? null,
 			companyId: input.companyId ?? null,
+			dealId: input.dealId ?? null,
 			emailThreadId: input.emailThreadId ?? null,
 			userId: input.userId ?? null,
 			allowCreate: input.allowCreate ?? false,

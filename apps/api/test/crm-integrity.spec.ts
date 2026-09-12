@@ -29,6 +29,7 @@ const agent = {
 	contactCreated: async () => undefined,
 	companyCreated: async () => undefined,
 	companyRequested: async () => undefined,
+	inquiryChanged: async () => undefined,
 } as unknown as AgentTriggerService;
 
 const stamp = new ActivityStampService(db);
@@ -43,7 +44,7 @@ const companies = new CompaniesService(
 	stamp,
 	{ extract: async () => null } as unknown as AiExtractService,
 );
-const deals = new DealsService(db, stamp);
+const deals = new DealsService(db, stamp, agent);
 const google = new GoogleConnectionService(
 	db,
 	{} as never,

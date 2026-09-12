@@ -7,7 +7,10 @@ import {
 	type NormalizedMailMessage,
 } from "../src/mail/mail-ingestion.service";
 
-const NOOP_AGENT = { mailReceived: async () => undefined } as never;
+const NOOP_AGENT = {
+	mailReceived: async () => undefined,
+	inquiryChanged: async () => undefined,
+} as never;
 
 type IngestionState = {
 	threadCreate?: Record<string, unknown>;
@@ -374,6 +377,7 @@ describe("mailbox ingestion", () => {
 				mailReceived: async (input: Record<string, unknown>) => {
 					reported = input;
 				},
+				inquiryChanged: async () => undefined,
 			} as never,
 		);
 		const mailbox = await ingestion.forMailbox({

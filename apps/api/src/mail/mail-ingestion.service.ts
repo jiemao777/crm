@@ -215,6 +215,12 @@ export class MailIngestionService {
 				userId: config.userId,
 				allowCreate,
 			});
+		} else if (dealId) {
+			await this.agent.inquiryChanged(
+				dealId,
+				"New mail landed on this inquiry",
+				30 * 60_000,
+			);
 		}
 
 		return {

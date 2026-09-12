@@ -124,7 +124,7 @@ function accessDb(options: {
 }
 
 function deals(db: Db): DealsService {
-	return new DealsService(db, {} as never);
+	return new DealsService(db, {} as never, {} as never);
 }
 
 describe("inquiry mutation access", () => {

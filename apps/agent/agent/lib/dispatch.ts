@@ -125,6 +125,7 @@ export function taskAuth(task: LeasedTask, base: AppAuth = APP_AUTH): AppAuth {
 			budget: String(task.budget),
 			...(task.contactId ? { contactId: task.contactId } : {}),
 			...(task.companyId ? { companyId: task.companyId } : {}),
+			...(task.dealId ? { dealId: task.dealId } : {}),
 			...(task.emailThreadId ? { emailThreadId: task.emailThreadId } : {}),
 			...(task.userId ? { userId: task.userId } : {}),
 			...(task.emailThreadId ? { allowCreate: String(task.allowCreate) } : {}),
@@ -159,6 +160,8 @@ function work(kind: string, reason: string): string {
 			return "There is a meeting with this person soon. Make sure whoever is taking it opens the record knowing who they are dealing with.";
 		case "mail-intake":
 			return "Classify this email thread and file it against an existing CRM record only when the messages prove the match. Leave it unlinked when they do not.";
+		case "inquiry-intelligence":
+			return "Refresh this inquiry's health score and forecast summary. Read the record and its timeline, then call write_inquiry_intelligence once — the score itself is computed for you; what you write is the why and the where-this-stands.";
 		case "company-profile":
 			return "This company's brand, industry, location and links are filled in separately and may already be there. Read the account, fill anything still missing, and write a brief if there is something worth saying.";
 		case "workspace-profile":

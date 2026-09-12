@@ -13,6 +13,7 @@ import {
 	Logger,
 	NotFoundException,
 } from "@nestjs/common";
+import { AgentTriggerService } from "../agent/agent-trigger.service";
 import {
 	assertCompanyAccess,
 	assertDealAccess,
@@ -97,6 +98,7 @@ export class DealsService {
 	constructor(
 		@InjectDatabase() private readonly db: Db,
 		private readonly stamp: ActivityStampService,
+		private readonly agent: AgentTriggerService,
 	) {}
 
 	async list(input: DealListInput) {
@@ -705,6 +707,10 @@ export class DealsService {
 					{ companyId: result.companyId, dealId: result.dealId },
 					new Date(),
 				);
+				await this.agent.inquiryChanged(
+					result.dealId,
+					"A quotation became a proforma invoice",
+				);
 			}
 
 			return result;
@@ -1103,6 +1109,11 @@ export class DealsService {
 			from: deal.stage,
 			to: input.stage,
 		});
+
+		await this.agent.inquiryChanged(
+			deal.id,
+			`Stage changed from ${deal.stage} to ${input.stage}`,
+		);
 
 		return { ...updated, changed: true };
 	}
