@@ -47,5 +47,8 @@ yarn-error.log*
 # Local runtime state and credentials
 .pi-runtime/
 
+# Local port overrides (e.g. when 5432 is taken by another app)
+docker-compose.override.yml
+
 # Throwaway shape/verify scripts
 .scratch/
