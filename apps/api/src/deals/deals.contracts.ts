@@ -68,6 +68,7 @@ const dealUpdateInput = z
 		expectedOrderDate: z.string().nullable().optional(),
 		expectedCloseDate: z.string().nullable().optional(),
 		inquiryReceivedAt: z.string().nullable().optional(),
+		forecastContextManual: z.string().trim().max(4_000).nullable().optional(),
 	})
 	.extend(tradeTermsInput.shape);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import UserMultiple from "@carbon/icons-react/es/UserMultiple";
+import { Badge } from "@crm/ui/components/badge";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
 import {
 	EntityLogo,
@@ -10,6 +11,7 @@ import { PersonAvatar } from "@crm/ui/components/person-avatar";
 import { SimpleTable, SimpleTableRow } from "@crm/ui/components/simple-table";
 import { TableCell } from "@crm/ui/components/table";
 import { formatMoney } from "@crm/ui/lib/format";
+import { cn } from "@crm/ui/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AgentPanel } from "@/components/crm/agent-panel";
@@ -191,7 +193,7 @@ export function DealSheet({ dealId }: { dealId: string }) {
 }
 
 function DealOverview({ deal }: { deal: Deal }) {
-	const { locale, t } = useLanguage();
+	const { language, locale, t } = useLanguage();
 	const dateFormat = new Intl.DateTimeFormat(locale, {
 		month: "short",
 		day: "numeric",
@@ -214,6 +216,7 @@ function DealOverview({ deal }: { deal: Deal }) {
 		update.mutate({ id: deal.id, data });
 
 	const isSaving = savingField(update);
+	const forecast = deal.forecastContextManual ?? deal.forecastContext;
 
 	return (
 		<DetailSheetBody>
@@ -234,6 +237,71 @@ function DealOverview({ deal }: { deal: Deal }) {
 						</DetailSheetProperty>
 					</DetailSheetProperties>
 				) : null}
+			</DetailSheetSection>
+
+			<DetailSheetSection title={t("deal.health")}>
+				{deal.score === null ? (
+					<p className="text-muted-foreground text-sm">{t("deal.noScore")}</p>
+				) : (
+					<div className="flex flex-col gap-1.5">
+						<div className="flex items-baseline gap-1.5">
+							<span
+								className={cn(
+									"font-semibold text-2xl tabular-nums",
+									deal.score >= 67
+										? "text-primary"
+										: deal.score >= 34
+											? "text-amber-600 dark:text-amber-500"
+											: "text-destructive",
+								)}
+							>
+								{deal.score}
+							</span>
+							<span className="text-muted-foreground text-xs">/ 100</span>
+							{deal.scoredAt ? (
+								<span className="ml-auto text-muted-foreground text-xs">
+									{formatRelativeTime(deal.scoredAt, language)}
+								</span>
+							) : null}
+						</div>
+						{deal.scoreSummary ? (
+							<p className="text-muted-foreground text-sm/6">
+								{deal.scoreSummary}
+							</p>
+						) : null}
+					</div>
+				)}
+			</DetailSheetSection>
+
+			<DetailSheetSection title={t("deal.forecast")}>
+				{forecast ? (
+					<div className="flex flex-col gap-1.5">
+						<p className="whitespace-pre-wrap text-sm/6">{forecast}</p>
+						<div className="flex items-center gap-2">
+							{deal.forecastContextManual ? (
+								<Badge variant="secondary">{t("deal.manual")}</Badge>
+							) : deal.forecastUpdatedAt ? (
+								<span className="text-muted-foreground text-xs">
+									{formatRelativeTime(deal.forecastUpdatedAt, language)}
+								</span>
+							) : null}
+						</div>
+					</div>
+				) : (
+					<p className="text-muted-foreground text-sm">
+						{t("deal.noForecast")}
+					</p>
+				)}
+				<DetailSheetProperties>
+					<InlineField
+						label={t("deal.forecastOverride")}
+						value={deal.forecastContextManual}
+						saving={isSaving("forecastContextManual")}
+						onSave={(forecastContextManual) =>
+							save({ forecastContextManual: forecastContextManual || null })
+						}
+					/>
+				</DetailSheetProperties>
 			</DetailSheetSection>
 
 			<DetailSheetSection title={t("deal.inquiry")}>

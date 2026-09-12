@@ -198,6 +198,12 @@ export class DealsService {
 				quotedAt: true,
 				closedAt: true,
 				closedReason: true,
+				score: true,
+				scoreSummary: true,
+				scoredAt: true,
+				forecastContext: true,
+				forecastContextManual: true,
+				forecastUpdatedAt: true,
 				createdAt: true,
 				company: { select: { ...COMPANY_SELECT, industry: true } },
 				owner: { select: OWNER_SELECT },
@@ -415,6 +421,9 @@ export class DealsService {
 		}
 		if (input.quoteValidUntil !== undefined) {
 			data.quoteValidUntil = parseDate(input.quoteValidUntil);
+		}
+		if (input.forecastContextManual !== undefined) {
+			data.forecastContextManual = textValue(input.forecastContextManual);
 		}
 
 		try {

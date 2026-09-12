@@ -450,6 +450,12 @@ export const DICT = {
 	"deal.closedAt": { zh: "结束时间", en: "Closed" },
 	"deal.closedReason": { zh: "原因", en: "Reason" },
 	"deal.inStage": { zh: "阶段停留", en: "In stage" },
+	"deal.health": { zh: "健康度", en: "Health" },
+	"deal.noScore": { zh: "尚未评分", en: "Not scored yet" },
+	"deal.forecast": { zh: "进展摘要", en: "Forecast" },
+	"deal.forecastOverride": { zh: "人工覆盖", en: "Manual override" },
+	"deal.manual": { zh: "手动", en: "Manual" },
+	"deal.noForecast": { zh: "暂无进展摘要", en: "No forecast yet" },
 	"deal.role": { zh: "角色", en: "Role" },
 	"deal.noContacts": {
 		zh: "该询盘暂无联系人",
